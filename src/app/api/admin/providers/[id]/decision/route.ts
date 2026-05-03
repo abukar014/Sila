@@ -6,19 +6,23 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { action, reason } = await request.json()
+  const { decision, notes } = await request.json()
 
-  const updates = action === 'approve'
-    ? {
-        verification_status: 'verified',
-        verified: true,
-        verified_date: new Date().toISOString().split('T')[0],
-        status: 'active',
-      }
-    : {
-        verification_status: 'rejected',
-        verification_notes: reason ?? '',
-      }
+  const updates: any = {
+    verification_status: decision,
+    verification_notes: notes ?? null,
+  }
+
+  if (decision === 'verified') {
+    updates.verified = true
+    updates.verified_date = new Date().toISOString().split('T')[0]
+    updates.status = 'active'
+  }
+
+  if (decision === 'rejected') {
+    updates.verified = false
+    updates.status = 'inactive'
+  }
 
   const { error } = await supabaseAdmin
     .from('providers')
@@ -30,10 +34,10 @@ export async function POST(
   await supabaseAdmin.from('verification_logs').insert({
     provider_id: id,
     check_type: 'decision',
-    result: action === 'approve' ? 'approved' : 'rejected',
-    raw_output: action === 'approve'
-      ? 'Provider approved and set to active'
-      : `Rejected: ${reason}`,
+    result: decision,
+    passed: decision === 'verified',
+    notes: notes ?? null,
+    check_date: new Date().toISOString(),
     run_by: 'admin',
   })
 
