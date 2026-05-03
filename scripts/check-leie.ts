@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+
 import { parse } from 'csv-parse/sync'
 
 const [,, lastName, firstName, npi] = process.argv

@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+
 const NPI = process.argv[2]
 
 if (!NPI) {
