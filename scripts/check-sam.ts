@@ -1,5 +1,7 @@
 import * as dotenv from 'dotenv'
-dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env.local', override: true })
+
+import { parse } from 'csv-parse/sync'
 
 const [,, firstName, lastName] = process.argv
 
@@ -8,74 +10,43 @@ if (!firstName || !lastName) {
   process.exit(1)
 }
 
-const SAM_API_KEY = process.env.SAM_API_KEY
-
-if (!SAM_API_KEY) {
-  console.error('Missing SAM_API_KEY in environment variables')
-  process.exit(1)
-}
-
-async function fetchSAM(name: string): Promise<Response> {
-  const url = `https://api.sam.gov/entity-information/v4/exclusions?api_key=${SAM_API_KEY}&exclusionName=${name}&classification=Individual&recordStatus=Active`
-  const res = await fetch(url)
-  // Retry once — SAM.gov sometimes returns 404 transiently for valid queries
-  if (res.status === 404) {
-    await new Promise(r => setTimeout(r, 1500))
-    return fetch(url)
-  }
-  return res
-}
+const SAM_CSV_URL = 'https://inventory.data.gov/dataset/7416a2e4-9aa7-4bcd-801c-20f25a545916/resource/78bb6c57-42e8-4055-931d-928ebcbde39f/download/samexclusionspublicextract-gsa-1626.csv'
 
 async function checkSAM(firstName: string, lastName: string) {
-  const name = encodeURIComponent(`${firstName} ${lastName}`)
-  const res = await fetchSAM(name)
+  console.log('Downloading SAM exclusions database...')
 
-  // After retry, a 404 means SAM.gov found no exclusion records — person is clear
-  if (res.status === 404) {
-    return { excluded: false, matches: [], note: null }
-  }
+  const res = await fetch(SAM_CSV_URL)
+  if (!res.ok) throw new Error(`Failed to download SAM exclusions: ${res.status}`)
 
-  // Any other non-200 is a genuine API failure
-  if (!res.ok) {
-    return {
-      excluded: false,
-      matches: [],
-      note: `SAM.gov API returned ${res.status} — verify manually at sam.gov/search/#/exclusions`
-    }
-  }
+  const csv = await res.text()
+  const records = parse(csv, { columns: true, skip_empty_lines: true }) as any[]
 
-  const data = await res.json()
-  const results: any[] = data?.excludedEntity ?? []
-
-  const matches = results.filter((entry: any) => {
-    const entryFirst = (entry.exclusionIdentification?.firstName ?? '').toLowerCase()
-    const entryLast = (entry.exclusionIdentification?.lastName ?? '').toLowerCase()
+  const matches = records.filter((entry: any) => {
+    if ((entry.Classification ?? '').toLowerCase() !== 'individual') return false
+    const entryFirst = (entry.First ?? '').toLowerCase()
+    const entryLast = (entry.Last ?? '').toLowerCase()
     return (
       entryLast === lastName.toLowerCase() &&
       entryFirst.startsWith(firstName.toLowerCase()[0])
     )
   })
 
-  return { excluded: matches.length > 0, matches, note: null }
+  return matches
 }
 
 checkSAM(firstName, lastName)
-  .then(result => {
-    if (result.excluded) {
+  .then(matches => {
+    if (matches.length > 0) {
       console.log('\n✗ EXCLUDED on SAM.gov — DO NOT LIST\n')
-      result.matches.forEach((m: any) => {
-        const id = m.exclusionIdentification ?? {}
-        const details = m.exclusionDetails ?? {}
-        console.log(`  Name:       ${id.firstName} ${id.lastName}`)
-        console.log(`  Type:       ${details.exclusionType ?? 'N/A'}`)
-        console.log(`  Agency:     ${details.excludingAgencyName ?? 'N/A'}`)
-        console.log(`  NPI:        ${id.npi ?? 'N/A'}\n`)
+      matches.forEach((m: any) => {
+        console.log(`  Name:       ${m.First} ${m.Last}`)
+        console.log(`  Type:       ${m['Exclusion Type'] ?? 'N/A'}`)
+        console.log(`  Agency:     ${m['Excluding Agency'] ?? 'N/A'}`)
+        console.log(`  Active:     ${m['Active Date'] ?? 'N/A'}`)
+        console.log(`  NPI:        ${m.NPI || 'N/A'}\n`)
       })
-    } else if (result.note) {
-      console.log('\n⚠ MANUAL VERIFICATION REQUIRED\n')
-      console.log(`  ${result.note}\n`)
     } else {
-      console.log('\n✓ CLEAR — Not found on SAM.gov exclusion list\n')
+      console.log('\n✓ CLEAR — Not found on SAM exclusion list\n')
     }
   })
   .catch(err => {
