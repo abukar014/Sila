@@ -1,7 +1,13 @@
 import * as dotenv from 'dotenv'
-dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env.local', override: true })
 
 import { parse } from 'csv-parse/sync'
+import * as fs from 'fs'
+import * as path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const [,, lastName, firstName, npi] = process.argv
 
@@ -11,6 +17,25 @@ if (!lastName || !firstName) {
 }
 
 const LEIE_URL = 'https://oig.hhs.gov/exclusions/downloadables/UPDATED.csv'
+const CACHE_PATH = path.join(__dirname, '.leie-cache.csv')
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+async function getCSV(): Promise<string> {
+  const cacheExists = fs.existsSync(CACHE_PATH)
+  if (cacheExists) {
+    const age = Date.now() - fs.statSync(CACHE_PATH).mtimeMs
+    if (age < CACHE_TTL_MS) {
+      console.log('Using cached LEIE database (updated today)\n')
+      return fs.readFileSync(CACHE_PATH, 'utf-8')
+    }
+  }
+  console.log('Downloading OIG LEIE database...\n')
+  const res = await fetch(LEIE_URL)
+  if (!res.ok) throw new Error(`Failed to download LEIE database: ${res.status}`)
+  const csv = await res.text()
+  fs.writeFileSync(CACHE_PATH, csv, 'utf-8')
+  return csv
+}
 
 // Common transliterations for names frequently seen in Muslim/South Asian communities
 const NAME_ALIASES: Record<string, string[]> = {
@@ -65,12 +90,7 @@ interface Match {
 }
 
 async function checkLEIE(lastName: string, firstName: string, npi?: string): Promise<Match[]> {
-  console.log('Downloading OIG LEIE database...\n')
-
-  const res = await fetch(LEIE_URL)
-  if (!res.ok) throw new Error(`Failed to download LEIE database: ${res.status}`)
-
-  const csv = await res.text()
+  const csv = await getCSV()
   const records = parse(csv, { columns: true, skip_empty_lines: true }) as any[]
 
   const matches: Match[] = []
