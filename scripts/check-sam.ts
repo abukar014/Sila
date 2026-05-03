@@ -21,11 +21,12 @@ async function checkSAM(firstName: string, lastName: string) {
 
   const res = await fetch(url)
 
+  // Any non-200 response is not a confirmed clear — require manual verification
   if (!res.ok) {
     return {
       excluded: false,
       matches: [],
-      note: `SAM.gov API returned ${res.status} — verify manually at sam.gov/search/#/exclusions`
+      note: `SAM.gov API returned ${res.status} — MANUAL VERIFICATION REQUIRED at sam.gov/search/#/exclusions`
     }
   }
 
@@ -51,16 +52,16 @@ checkSAM(firstName, lastName)
       result.matches.forEach((m: any) => {
         const id = m.exclusionIdentification ?? {}
         const details = m.exclusionDetails ?? {}
-        const actions = m.exclusionActions ?? {}
         console.log(`  Name:       ${id.firstName} ${id.lastName}`)
         console.log(`  Type:       ${details.exclusionType ?? 'N/A'}`)
         console.log(`  Agency:     ${details.excludingAgencyName ?? 'N/A'}`)
-        console.log(`  Active from:${actions.startDate ?? 'N/A'}`)
         console.log(`  NPI:        ${id.npi ?? 'N/A'}\n`)
       })
+    } else if (result.note) {
+      console.log('\n⚠ MANUAL VERIFICATION REQUIRED\n')
+      console.log(`  ${result.note}\n`)
     } else {
       console.log('\n✓ CLEAR — Not found on SAM.gov exclusion list\n')
-      if (result.note) console.log(`  Note: ${result.note}\n`)
     }
   })
   .catch(err => {
