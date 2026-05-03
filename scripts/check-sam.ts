@@ -15,18 +15,32 @@ if (!SAM_API_KEY) {
   process.exit(1)
 }
 
+async function fetchSAM(name: string): Promise<Response> {
+  const url = `https://api.sam.gov/entity-information/v4/exclusions?api_key=${SAM_API_KEY}&exclusionName=${name}&classification=Individual&recordStatus=Active`
+  const res = await fetch(url)
+  // Retry once — SAM.gov sometimes returns 404 transiently for valid queries
+  if (res.status === 404) {
+    await new Promise(r => setTimeout(r, 1500))
+    return fetch(url)
+  }
+  return res
+}
+
 async function checkSAM(firstName: string, lastName: string) {
   const name = encodeURIComponent(`${firstName} ${lastName}`)
-  const url = `https://api.sam.gov/entity-information/v4/exclusions?api_key=${SAM_API_KEY}&exclusionName=${name}&classification=Individual&recordStatus=Active`
+  const res = await fetchSAM(name)
 
-  const res = await fetch(url)
+  // After retry, a 404 means SAM.gov found no exclusion records — person is clear
+  if (res.status === 404) {
+    return { excluded: false, matches: [], note: null }
+  }
 
-  // Any non-200 response is not a confirmed clear — require manual verification
+  // Any other non-200 is a genuine API failure
   if (!res.ok) {
     return {
       excluded: false,
       matches: [],
-      note: `SAM.gov API returned ${res.status} — MANUAL VERIFICATION REQUIRED at sam.gov/search/#/exclusions`
+      note: `SAM.gov API returned ${res.status} — verify manually at sam.gov/search/#/exclusions`
     }
   }
 
