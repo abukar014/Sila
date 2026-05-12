@@ -9,23 +9,23 @@ function formatDate(date: string) {
   })
 }
 
-export default async function AdminQueue() {
+export default async function RejectedPage() {
   const { data: providers } = await supabaseAdmin
     .from('providers')
-    .select('id, name, credentials, city, npi, created_at, verification_status')
-    .eq('verification_status', 'pending')
-    .order('created_at', { ascending: true })
+    .select('id, name, credentials, city, npi, created_at, verification_notes')
+    .eq('verification_status', 'rejected')
+    .order('created_at', { ascending: false })
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-white mb-1">Review Queue</h1>
+      <h1 className="text-xl font-semibold text-white mb-1">Rejected Applications</h1>
       <p className="text-sm mb-8" style={{ color: '#666' }}>
-        {providers?.length ?? 0} provider{providers?.length !== 1 ? 's' : ''} awaiting review
+        {providers?.length ?? 0} rejected provider{providers?.length !== 1 ? 's' : ''}
       </p>
 
       {!providers || providers.length === 0 ? (
         <div className="flex items-center justify-center h-64" style={{ color: '#555' }}>
-          No providers pending review.
+          No rejected applications.
         </div>
       ) : (
         <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #2a2a2a' }}>
@@ -37,7 +37,7 @@ export default async function AdminQueue() {
                 <th className="text-left px-5 py-3 font-medium" style={{ color: '#666' }}>City</th>
                 <th className="text-left px-5 py-3 font-medium" style={{ color: '#666' }}>NPI</th>
                 <th className="text-left px-5 py-3 font-medium" style={{ color: '#666' }}>Submitted</th>
-                <th className="text-left px-5 py-3 font-medium" style={{ color: '#666' }}>Status</th>
+                <th className="text-left px-5 py-3 font-medium" style={{ color: '#666' }}>Reason</th>
                 <th className="text-left px-5 py-3 font-medium" style={{ color: '#666' }}>Action</th>
               </tr>
             </thead>
@@ -56,16 +56,8 @@ export default async function AdminQueue() {
                   <td className="px-5 py-4" style={{ color: '#888' }}>{p.city ?? '—'}</td>
                   <td className="px-5 py-4" style={{ color: '#888' }}>{p.npi ?? '—'}</td>
                   <td className="px-5 py-4" style={{ color: '#888' }}>{formatDate(p.created_at)}</td>
-                  <td className="px-5 py-4">
-                    {p.verification_status === 'pending' ? (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: '#451a03', color: '#fb923c' }}>
-                        Pending
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: '#450a0a', color: '#f87171' }}>
-                        Rejected
-                      </span>
-                    )}
+                  <td className="px-5 py-4 max-w-[200px]" style={{ color: '#888' }}>
+                    <span className="line-clamp-2 text-xs">{p.verification_notes ?? '—'}</span>
                   </td>
                   <td className="px-5 py-4">
                     <Link
@@ -73,7 +65,7 @@ export default async function AdminQueue() {
                       className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                       style={{ backgroundColor: '#222', color: '#fff', border: '1px solid #333' }}
                     >
-                      Review
+                      View
                     </Link>
                   </td>
                 </tr>

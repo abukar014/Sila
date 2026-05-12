@@ -9,6 +9,22 @@ const SAM_CSV_URL = 'https://inventory.data.gov/dataset/7416a2e4-9aa7-4bcd-801c-
 const CACHE_PATH = path.join(os.tmpdir(), 'sila-sam-cache.csv')
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
+const STATE_ABBR: Record<string, string> = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+  'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY',
+}
+
 async function getCSV(): Promise<string> {
   if (fs.existsSync(CACHE_PATH)) {
     const age = Date.now() - fs.statSync(CACHE_PATH).mtimeMs
@@ -29,7 +45,7 @@ export async function POST(
 
   const { data: provider } = await supabaseAdmin
     .from('providers')
-    .select('name')
+    .select('name, state')
     .eq('id', id)
     .single()
 
@@ -39,10 +55,14 @@ export async function POST(
   const firstName = nameParts[0] ?? ''
   const lastName = nameParts[nameParts.length - 1] ?? ''
 
+  const providerStateAbbr = provider.state
+    ? (STATE_ABBR[provider.state.toLowerCase()] ?? provider.state.toUpperCase().slice(0, 2))
+    : null
+
   const csv = await getCSV()
   const records = parse(csv, { columns: true, skip_empty_lines: true }) as any[]
 
-  const matches = records.filter((entry: any) => {
+  const nameMatches = records.filter((entry: any) => {
     if ((entry.Classification ?? '').toLowerCase() !== 'individual') return false
     const entryFirst = (entry.First ?? '').toLowerCase()
     const entryLast = (entry.Last ?? '').toLowerCase()
@@ -52,10 +72,37 @@ export async function POST(
     )
   })
 
-  const result = matches.length > 0 ? 'excluded' : 'clear'
-  const details = matches.length > 0
-    ? matches.map((m: any) => `${m.First} ${m.Last} | ${m['Exclusion Type']} | ${m['Excluding Agency']} | Active: ${m['Active Date']}`).join('\n')
-    : `No exclusion record found for ${provider.name}`
+  if (nameMatches.length === 0) {
+    const details = `No exclusion record found for ${provider.name}`
+    await supabaseAdmin.from('verification_logs').insert({
+      provider_id: id,
+      check_type: 'sam',
+      result: 'clear',
+      raw_output: details,
+      run_by: 'admin',
+    })
+    return NextResponse.json({ result: 'clear', details })
+  }
+
+  // Cross-reference state for each name match
+  const highConfidence = nameMatches.filter((m: any) => {
+    const samState = (m['Address 2'] ?? m['State/Province'] ?? '').toUpperCase().trim()
+    return providerStateAbbr && samState && samState === providerStateAbbr
+  })
+
+  let result: string
+  let details: string
+
+  const formatMatch = (m: any) =>
+    `${m.First} ${m.Last} | ${m['Exclusion Type']} | ${m['Excluding Agency']} | Active: ${m['Active Date']} | Address: ${m['Address 1'] ?? ''}, ${m['City'] ?? ''}, ${m['Address 2'] ?? ''}`
+
+  if (highConfidence.length > 0) {
+    result = 'excluded'
+    details = `High confidence — name + state match:\n${highConfidence.map(formatMatch).join('\n')}`
+  } else {
+    result = 'review_required'
+    details = `Name match but state does not align with provider's submitted state (${providerStateAbbr ?? 'unknown'}) — verify manually:\n${nameMatches.map(formatMatch).join('\n')}`
+  }
 
   await supabaseAdmin.from('verification_logs').insert({
     provider_id: id,

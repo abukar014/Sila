@@ -17,6 +17,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <span className="text-white text-base" style={{ fontWeight: 700 }}>Sila Admin</span>
         <div className="flex items-center gap-6">
           <Link href="/admin" className="text-white/60 text-sm hover:text-white transition-colors">Queue</Link>
+          <Link href="/admin/in-review" className="text-white/60 text-sm hover:text-white transition-colors">In Review</Link>
+          <Link href="/admin/excluded" className="text-white/60 text-sm hover:text-white transition-colors">Excluded</Link>
           <Link href="/admin/verified" className="text-white/60 text-sm hover:text-white transition-colors">Verified</Link>
           <button
             onClick={signOut}

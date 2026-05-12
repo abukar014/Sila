@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { notFound } from 'next/navigation'
 import VerificationPanel from './VerificationPanel'
+import CredentialsEditor from './CredentialsEditor'
 
 export const revalidate = 0
 
@@ -37,7 +38,8 @@ export default async function ProviderDetailPage({
     .order('created_at', { ascending: false })
 
   const statusColor = provider.verification_status === 'pending' ? '#fb923c'
-    : provider.verification_status === 'rejected' ? '#f87171'
+    : provider.verification_status === 'in_review' ? '#93c5fd'
+    : provider.verification_status === 'excluded' ? '#ef4444'
     : '#22c55e'
 
   return (
@@ -88,13 +90,41 @@ export default async function ProviderDetailPage({
               <p className="text-sm italic leading-relaxed" style={{ color: '#ccc' }}>"{provider.pull_quote}"</p>
             </div>
           )}
+
+          <CredentialsEditor
+            providerId={provider.id}
+            initial={{
+              npi: provider.npi,
+              dob: provider.dob,
+              license_number: provider.license_number,
+              license_type: provider.license_type,
+              state: provider.state,
+            }}
+          />
         </div>
 
         {/* Right — verification panel */}
-        <VerificationPanel
-          providerId={provider.id}
-          initialLogs={logs ?? []}
-        />
+        {provider.verification_status === 'excluded' ? (
+          <div className="flex flex-col gap-4">
+            <div style={{ backgroundColor: '#1a0a0a', border: '1px solid #450a0a', borderRadius: 12, padding: 20 }}>
+              <p className="text-sm font-semibold mb-2" style={{ color: '#f87171' }}>⛔ Account Permanently Locked</p>
+              <p className="text-xs leading-relaxed" style={{ color: '#888' }}>
+                This provider was confirmed on a federal exclusion list. Their NPI is permanently blocked
+                and this account cannot be approved or reactivated. No further action is required.
+              </p>
+            </div>
+            <VerificationPanel
+              providerId={provider.id}
+              initialLogs={logs ?? []}
+              isExcluded
+            />
+          </div>
+        ) : (
+          <VerificationPanel
+            providerId={provider.id}
+            initialLogs={logs ?? []}
+          />
+        )}
       </div>
     </div>
   )

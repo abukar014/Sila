@@ -20,6 +20,9 @@ export async function POST(
       run_by: 'admin',
     })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('verification_logs insert error:', error.message)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
   return NextResponse.json({ success: true })
 }

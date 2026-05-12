@@ -36,20 +36,30 @@ const RESULT_STYLES: Record<string, { color: string; icon: string }> = {
 export default function VerificationPanel({
   providerId,
   initialLogs,
+  isExcluded = false,
 }: {
   providerId: string
   initialLogs: Log[]
+  isExcluded?: boolean
 }) {
   const router = useRouter()
   const [checkResults, setCheckResults] = useState<Partial<Record<string, CheckResult>>>({})
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [logs, setLogs] = useState<Log[]>(initialLogs)
-  const [showRejectInput, setShowRejectInput] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
+  const [showReviewInput, setShowReviewInput] = useState(false)
+  const [reviewNotes, setReviewNotes] = useState('')
+  const [requestCorrections, setRequestCorrections] = useState(false)
   const [deciding, setDeciding] = useState(false)
   const [decided, setDecided] = useState(false)
+  const [stateLicenseVerified, setStateLicenseVerified] = useState(false)
+  const [stateLicenseSaving, setStateLicenseSaving] = useState(false)
+  const [flagging, setFlagging] = useState(false)
+  const [flagged, setFlagged] = useState(false)
+  const [exclusionConfirmed, setExclusionConfirmed] = useState(false)
 
-  const allChecksRun = ['nppes', 'leie', 'sam'].every(t => checkResults[t])
+  const allChecksRun = ['nppes', 'leie', 'sam'].every(t => checkResults[t]) && stateLicenseVerified
+  const confirmedExclusion = ['leie', 'sam'].some(t => checkResults[t]?.result === 'excluded')
+    || checkResults['nppes']?.result === 'excluded'
 
   async function runCheck(type: string) {
     setLoading(prev => ({ ...prev, [type]: true }))
@@ -71,12 +81,57 @@ export default function VerificationPanel({
     setLoading(prev => ({ ...prev, [type]: false }))
   }
 
-  async function handleDecision(action: 'approve' | 'reject') {
+  async function handleFlag() {
+    setFlagging(true)
+    const res = await fetch(`/api/admin/providers/${providerId}/flag`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Confirmed OIG/SAM exclusion' }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Failed to block NPI: ${data.error ?? res.statusText}`)
+      setFlagging(false)
+      return
+    }
+    setFlagged(true)
+    setFlagging(false)
+    router.refresh()
+  }
+
+  async function confirmStateLicense() {
+    setStateLicenseSaving(true)
+    await fetch(`/api/admin/providers/${providerId}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        check_type: 'state_license',
+        result: 'verified',
+        passed: true,
+        notes: 'Manually verified on state board website',
+      }),
+    })
+    setStateLicenseVerified(true)
+    setLogs(prev => [{
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
+      check_type: 'state_license',
+      result: 'verified',
+      raw_output: 'Manually verified on state board website',
+    }, ...prev])
+    setStateLicenseSaving(false)
+  }
+
+  async function handleDecision(action: 'approve' | 'in_review') {
     setDeciding(true)
     await fetch(`/api/admin/providers/${providerId}/decision`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, reason: rejectReason }),
+      body: JSON.stringify({
+        decision: action === 'approve' ? 'verified' : 'in_review',
+        notes: reviewNotes || null,
+        requestCorrections: action === 'in_review' ? requestCorrections : false,
+      }),
     })
     setDecided(true)
     setDeciding(false)
@@ -85,7 +140,7 @@ export default function VerificationPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Check sections */}
+      {/* Automated check sections */}
       {(Object.entries(CHECK_META) as [string, { label: string; description: string }][]).map(([type, meta]) => {
         const res = checkResults[type]
         const style = res ? RESULT_STYLES[res.result] : null
@@ -119,8 +174,90 @@ export default function VerificationPanel({
         )
       })}
 
-      {/* Decision buttons */}
+      {/* State license — manual */}
       <div style={{ backgroundColor: '#111', border: '1px solid #2a2a2a', borderRadius: 12, padding: 16 }}>
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <p className="text-white text-sm font-semibold">State License</p>
+            <p className="text-xs mt-0.5" style={{ color: '#555' }}>Manually verify on the state board website</p>
+          </div>
+          {stateLicenseVerified ? (
+            <span className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: '#052e16', color: '#22c55e', border: '1px solid #14532d' }}>
+              ✓ Verified
+            </span>
+          ) : (
+            <button
+              onClick={confirmStateLicense}
+              disabled={stateLicenseSaving}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium"
+              style={{ backgroundColor: '#1e1e1e', border: '1px solid #333', color: stateLicenseSaving ? '#555' : '#aaa' }}
+            >
+              {stateLicenseSaving ? 'Saving...' : 'Mark verified'}
+            </button>
+          )}
+        </div>
+        <div className="mt-3 pt-3 flex flex-wrap gap-2" style={{ borderTop: '1px solid #1e1e1e' }}>
+          {[
+            { label: 'TX Medical Board', url: 'https://www.tmb.state.tx.us/page/lookup-physician' },
+            { label: 'TX BHEC', url: 'https://bhec.texas.gov/verify-a-license/' },
+            { label: 'TX Board of Nursing', url: 'https://www.bon.texas.gov/licensure_verification.asp' },
+            { label: 'TX Dental Board', url: 'https://www.tsbde.texas.gov/verify/' },
+          ].map(({ label, url }) => (
+            <a
+              key={label}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs px-2.5 py-1 rounded-md"
+              style={{ backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #2a2a2a' }}
+            >
+              {label} ↗
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Exclusion flag — only shown when OIG/SAM/NPPES returns excluded */}
+      {confirmedExclusion && (
+        <div style={{ backgroundColor: '#1a0a0a', border: '1px solid #450a0a', borderRadius: 12, padding: 16 }}>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#f87171' }}>Confirmed Exclusion</p>
+          <p className="text-xs mb-3" style={{ color: '#888' }}>
+            This provider appears on a federal exclusion list. Blocking their NPI will prevent re-registration under any email.
+          </p>
+          {flagged ? (
+            <p className="text-xs font-semibold" style={{ color: '#f87171' }}>✓ NPI blocked and account locked</p>
+          ) : (
+            <>
+              <p className="text-xs mb-2" style={{ color: '#666' }}>
+                Before blocking, verify this is the same person using DOB, specialty, and address shown in the check result above.
+                Cross-reference at <a href="https://exclusions.oig.hhs.gov" target="_blank" rel="noopener noreferrer" style={{ color: '#f87171', textDecoration: 'underline' }}>exclusions.oig.hhs.gov</a> or <a href="https://sam.gov/search/?index=ei&page=1&pageSize=25&sort=-modifiedDate&sfm%5Bstatus%5D%5Bis_active%5D=true" target="_blank" rel="noopener noreferrer" style={{ color: '#f87171', textDecoration: 'underline' }}>sam.gov</a>.
+              </p>
+              <label className="flex items-start gap-2 mb-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={exclusionConfirmed}
+                  onChange={e => setExclusionConfirmed(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-xs" style={{ color: '#aaa' }}>
+                  I have manually verified this is the same individual on the federal exclusion list
+                </span>
+              </label>
+              <button
+                onClick={handleFlag}
+                disabled={flagging || !exclusionConfirmed}
+                className="px-4 py-2 rounded-lg text-xs font-semibold"
+                style={{ backgroundColor: '#450a0a', color: '#f87171', opacity: (flagging || !exclusionConfirmed) ? 0.4 : 1, cursor: !exclusionConfirmed ? 'not-allowed' : 'pointer' }}
+              >
+                {flagging ? 'Blocking...' : 'Confirm exclusion & block NPI'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Decision */}
+      {!isExcluded && <div style={{ backgroundColor: '#111', border: '1px solid #2a2a2a', borderRadius: 12, padding: 16 }}>
         <p className="text-sm font-semibold text-white mb-3">Decision</p>
 
         {decided ? (
@@ -141,42 +278,58 @@ export default function VerificationPanel({
                 {deciding ? 'Saving...' : 'Approve provider'}
               </button>
               <button
-                onClick={() => setShowRejectInput(v => !v)}
+                onClick={() => setShowReviewInput(v => !v)}
                 disabled={deciding}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
-                style={{ backgroundColor: '#2d0a0a', color: '#f87171', border: '1px solid #450a0a' }}
+                style={{ backgroundColor: '#1a1a2e', color: '#93c5fd', border: '1px solid #1e3a5f' }}
               >
-                Reject provider
+                Move to In Review
               </button>
             </div>
 
             {!allChecksRun && (
-              <p className="text-xs" style={{ color: '#444' }}>Run all three checks to enable approval.</p>
+              <p className="text-xs" style={{ color: '#444' }}>
+                Run all three checks and verify the state license to enable approval.
+              </p>
             )}
 
-            {showRejectInput && (
+            {showReviewInput && (
               <div className="mt-3 flex flex-col gap-2">
+                <p className="text-xs" style={{ color: '#555' }}>
+                  Internal note (not sent to provider) — what needs further verification?
+                </p>
                 <textarea
                   rows={3}
-                  placeholder="Rejection reason..."
-                  value={rejectReason}
-                  onChange={e => setRejectReason(e.target.value)}
+                  placeholder="e.g. NPPES name mismatch, state license not found on board site..."
+                  value={reviewNotes}
+                  onChange={e => setReviewNotes(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg text-sm resize-none"
                   style={{ backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff' }}
                 />
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requestCorrections}
+                    onChange={e => setRequestCorrections(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs" style={{ color: '#aaa' }}>
+                    Email provider asking them to submit corrected credentials (NPI, DOB, license)
+                  </span>
+                </label>
                 <button
-                  onClick={() => handleDecision('reject')}
-                  disabled={!rejectReason.trim() || deciding}
+                  onClick={() => handleDecision('in_review')}
+                  disabled={!reviewNotes.trim() || deciding}
                   className="py-2 rounded-lg text-sm font-medium"
-                  style={{ backgroundColor: '#450a0a', color: '#f87171' }}
+                  style={{ backgroundColor: '#1e3a5f', color: '#93c5fd', opacity: !reviewNotes.trim() ? 0.5 : 1 }}
                 >
-                  Confirm rejection
+                  Confirm — move to In Review
                 </button>
               </div>
             )}
           </>
         )}
-      </div>
+      </div>}
 
       {/* Verification log */}
       <div style={{ backgroundColor: '#111', border: '1px solid #2a2a2a', borderRadius: 12, padding: 16 }}>
