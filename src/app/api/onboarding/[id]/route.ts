@@ -9,7 +9,7 @@ export async function GET(
 
   const { data: provider, error } = await supabaseAdmin
     .from('providers')
-    .select('id, name, verification_status, status, verified_date, accepting_clients, scheduling_url, email')
+    .select('id, name, verification_status, status, verified_date, accepting_clients, scheduling_url, email, credentials, state, specialties, approaches, identity, visit_type, faith_approach, languages, bio, insurances, fee_individual, fee_couples, fee_initial, gender')
     .eq('id', id)
     .single()
 

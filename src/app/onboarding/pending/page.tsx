@@ -1,108 +1,114 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import MobileContainer from '@/components/MobileContainer';
-import StatusBar from '@/components/StatusBar';
+
+const f: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+
+const steps = [
+  { title: 'NPPES identity match', status: 'Confirmed · 12s', done: true },
+  { title: 'OIG exclusion list', status: 'No exclusions found', done: true },
+  { title: 'SAM.gov check', status: 'Clear', done: true },
+  { title: 'Texas state license', status: 'Awaiting reviewer', done: false },
+];
 
 export default function PendingPage() {
   const router = useRouter();
 
-  const verificationSteps = [
-    { title: 'NPPES identity match', status: 'Confirmed · 12s', completed: true },
-    { title: 'OIG exclusion list', status: 'No exclusions found', completed: true },
-    { title: 'SAM.gov check', status: 'Clear', completed: true },
-    { title: 'Texas state license', status: 'Awaiting reviewer', completed: false },
-  ];
-
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <MobileContainer>
-        <div className="flex flex-col h-full w-full">
-          <StatusBar />
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#c8d5e5' }}>
+      <div style={{
+        width: 390, height: 844,
+        background: 'linear-gradient(180deg, #1B2C4B 0%, #F0D8C8 100%)',
+        boxShadow: '0px 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        overflow: 'hidden', borderRadius: 40,
+        outline: '1px rgba(255, 255, 255, 0.10) solid', outlineOffset: -1,
+        display: 'flex', flexDirection: 'column',
+        ...f,
+      }}>
 
-          <div className="flex flex-col flex-1 w-full px-[28px]">
-            <div className="text-center pt-[24px]">
-              <h1
-                className="font-normal italic leading-[42px] text-[#0a0a0a] text-[28px]"
-                style={{ fontFamily: "'EB Garamond', serif" }}
-              >
-                Almost there.
-              </h1>
-              <p
-                className="font-normal leading-[19.5px] text-[#535b6a] text-[13px] mt-[6px]"
-                style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-              >
+        {/* Status bar */}
+        <div style={{
+          height: 51.5, flexShrink: 0,
+          paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        }}>
+          <span style={{ color: 'white', fontSize: 13, fontWeight: 600, lineHeight: '19.5px' }}>9:41</span>
+          <span style={{ color: 'white', fontSize: 12, fontWeight: 600, lineHeight: '16px' }}>●●●</span>
+        </div>
+
+        {/* Main content */}
+        <div style={{
+          flex: '1 1 0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+          paddingLeft: 28, paddingRight: 28, paddingBottom: 32,
+        }}>
+
+          <div>
+            {/* Heading */}
+            <div style={{ paddingTop: 24, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 28, lineHeight: '42px', textAlign: 'center' }}>
+                <span style={{ color: 'white', fontWeight: 400 }}>Almost </span>
+                <span style={{ color: 'white', fontWeight: 600 }}>there</span>
+              </div>
+              <div style={{ color: 'white', fontSize: 13, fontWeight: 400, lineHeight: '19.5px', textAlign: 'center' }}>
                 3 of 4 checks complete.
-              </p>
+              </div>
             </div>
 
-            <div className="mt-[32px] flex flex-col">
-              {verificationSteps.map((step, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-[12px] py-[12px] border-b border-[rgba(137,160,187,0.46)] last:border-b-0"
-                >
-                  <div
-                    className={`rounded-full size-[26px] flex items-center justify-center shrink-0 ${
-                      step.completed ? 'bg-[#1b2c4b]' : 'bg-[#c89849]'
-                    }`}
-                  >
-                    <p
-                      className="font-bold leading-[19.5px] text-[13px] text-white"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
-                      {step.completed ? '✓' : '○'}
-                    </p>
+            {/* Check rows */}
+            <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column' }}>
+              {steps.map((step, i) => (
+                <div key={step.title} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  paddingTop: 12, paddingBottom: 12,
+                  borderBottom: i < steps.length - 1 ? '1px solid rgba(137, 160, 187, 0.46)' : 'none',
+                }}>
+                  <div style={{
+                    width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                    background: step.done ? '#1B2C4B' : '#C89849',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ color: 'white', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>
+                      {step.done ? '✓' : '○'}
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    <p
-                      className="font-semibold leading-[20px] text-[#0a0a0a] text-[14px]"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: 'white', fontSize: 14, fontWeight: 600, lineHeight: '20px' }}>
                       {step.title}
-                    </p>
-                    <div className="flex items-center gap-[6px] mt-[2px]">
-                      {!step.completed && (
-                        <div className="bg-[#c89849] rounded-full size-[7px] shrink-0" />
+                    </div>
+                    <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {!step.done && (
+                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#C89849', flexShrink: 0 }} />
                       )}
-                      <p
-                        className="font-normal leading-[16.5px] text-[#535b6a] text-[11px]"
-                        style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-                      >
+                      <span style={{ color: 'white', fontSize: 11, fontWeight: 400, lineHeight: '16.5px' }}>
                         {step.status}
-                      </p>
+                      </span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <p
-              className="font-normal leading-[16px] text-[#535b6a] text-[12px] text-center mt-[16px]"
-              style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-            >
+            {/* Footer note */}
+            <div style={{ marginTop: 16, textAlign: 'center', color: 'white', fontSize: 12, fontWeight: 400, lineHeight: '16px' }}>
               We&apos;ll email you when complete.
-            </p>
-
-            {/* Spacer */}
-            <div className="flex-1" />
-
-            <div className="pb-[32px] pt-[20px]">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="bg-[#1b2c4b] h-[54.5px] w-full rounded-[14px] flex items-center justify-center"
-              >
-                <p
-                  className="font-semibold leading-[22.5px] text-[#fef6f0] text-[15px]"
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                >
-                  Close and check back later
-                </p>
-              </button>
             </div>
           </div>
+
+          {/* CTA */}
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{
+              width: '100%', height: 54.5,
+              background: '#1B2C4B', borderRadius: 14, border: 'none', cursor: 'pointer',
+              color: '#FEF6F0', fontSize: 15, fontWeight: 600, lineHeight: '22.5px',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            Close and check back later
+          </button>
+
         </div>
-      </MobileContainer>
+      </div>
     </main>
   );
 }

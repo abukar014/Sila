@@ -2,15 +2,59 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import MobileContainer from '@/components/MobileContainer';
-import StatusBar from '@/components/StatusBar';
-import ProgressIndicator from '@/components/ProgressIndicator';
+import Link from 'next/link';
+
+const f: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+
+function StepDots({ current, total, label }: { current: number; total: number; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {Array.from({ length: total }).map((_, i) => {
+        const active = i + 1 === current;
+        const done = i + 1 < current;
+        return (
+          <div key={i} style={{
+            width: active ? 9 : 7,
+            height: active ? 9 : 7,
+            borderRadius: '50%',
+            background: (active || done) ? '#1B2C4B' : 'rgba(40, 70, 107, 0.46)',
+            flexShrink: 0,
+          }} />
+        );
+      })}
+      <span style={{ marginLeft: 8, color: '#535B6A', fontSize: 11, fontWeight: 500, lineHeight: '16.5px', ...f }}>
+        {current} of {total} · {label}
+      </span>
+    </div>
+  );
+}
+
+function InputCard({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: 'white', borderRadius: 14,
+      outline: '1px rgba(40, 70, 107, 0.46) solid', outlineOffset: -1,
+      padding: '13px 15px 12px',
+      display: 'flex', flexDirection: 'column', gap: 4,
+    }}>
+      <div style={{ color: '#535B6A', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: '15px', ...f }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  border: 'none', background: 'transparent', outline: 'none', width: '100%',
+  color: '#2A1A1A', fontSize: 14, fontWeight: 500, lineHeight: '20px',
+  fontFamily: "'DM Sans', sans-serif",
+};
 
 export default function CredentialsPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     npi: '',
-    dob: '',
     licenseNumber: '',
     licenseType: '',
     licenseState: '',
@@ -19,10 +63,15 @@ export default function CredentialsPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  function set(key: keyof typeof formData) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setFormData((prev) => ({ ...prev, [key]: e.target.value }));
+  }
+
   async function handleContinue() {
     setError('');
 
-    if (!formData.npi || !formData.dob || !formData.licenseNumber || !formData.licenseType || !formData.licenseState) {
+    if (!formData.npi || !formData.licenseNumber || !formData.licenseType || !formData.licenseState) {
       setError('All fields except specialty are required.');
       return;
     }
@@ -40,7 +89,6 @@ export default function CredentialsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           npi: formData.npi,
-          dob: formData.dob,
           license_number: formData.licenseNumber,
           license_type: formData.licenseType,
           credentials: formData.licenseType,
@@ -61,214 +109,131 @@ export default function CredentialsPage() {
     }
   }
 
-  function handleSaveAndExit() {
-    router.push('/');
-  }
-
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <MobileContainer>
-        <div className="content-stretch flex flex-col h-full items-start relative shrink-0 w-full">
-          <StatusBar />
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#c8d5e5' }}>
+      <div style={{
+        width: 390, height: 844, padding: 1,
+        background: 'white',
+        boxShadow: '0px 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        overflow: 'hidden', borderRadius: 40,
+        outline: '1px rgba(255, 255, 255, 0.10) solid', outlineOffset: -1,
+        display: 'flex', flexDirection: 'column',
+        ...f,
+      }}>
 
-          <div className="flex-1 relative w-full">
-            <div className="px-[28px]">
-              <ProgressIndicator currentStep={2} totalSteps={4} stepLabel="Credentials" />
-
-              <div className="mt-[24px]">
-                <h1
-                  className="font-normal italic leading-[39px] text-[#0a0a0a] text-[26px]"
-                  style={{ fontFamily: "'EB Garamond', serif" }}
-                >
-                  Tell us how to verify you.
-                </h1>
-                <p
-                  className="font-normal leading-[21.125px] text-[#535b6a] text-[13px] mt-[6px]"
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-                >
-                  We check this against NPPES, OIG, and your state board.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-[10px] mt-[24px]">
-                {/* NPI */}
-                <div className="bg-white flex flex-col gap-[4px] pb-[12px] pt-[13px] px-[15px] rounded-[14px] relative">
-                  <div
-                    aria-hidden="true"
-                    className="absolute border border-[rgba(40,70,107,0.46)] border-solid inset-0 pointer-events-none rounded-[14px]"
-                  />
-                  <p
-                    className="font-semibold leading-[15px] text-[#535b6a] text-[10px] tracking-[0.5px] uppercase"
-                    style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                  >
-                    NPI number
-                  </p>
-                  <input
-                    type="text"
-                    value={formData.npi}
-                    onChange={(e) => setFormData({ ...formData, npi: e.target.value })}
-                    placeholder="10-digit NPI"
-                    className="font-medium leading-[20px] text-[#2a1a1a] text-[14px] bg-transparent border-none outline-none w-full placeholder:text-[#aaa]"
-                    style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                  />
-                </div>
-
-                {/* Date of birth */}
-                <div className="bg-white flex flex-col gap-[4px] pb-[12px] pt-[13px] px-[15px] rounded-[14px] relative">
-                  <div
-                    aria-hidden="true"
-                    className="absolute border border-[rgba(40,70,107,0.46)] border-solid inset-0 pointer-events-none rounded-[14px]"
-                  />
-                  <p
-                    className="font-semibold leading-[15px] text-[#535b6a] text-[10px] tracking-[0.5px] uppercase"
-                    style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                  >
-                    Date of birth
-                  </p>
-                  <input
-                    type="date"
-                    value={formData.dob}
-                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                    className="font-medium leading-[20px] text-[#2a1a1a] text-[14px] bg-transparent border-none outline-none w-full"
-                    style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                  />
-                </div>
-
-                {/* License # and type */}
-                <div className="flex gap-[8px]">
-                  <div className="bg-white flex flex-col gap-[4px] pb-[12px] pt-[13px] px-[15px] rounded-[14px] flex-1 relative">
-                    <div
-                      aria-hidden="true"
-                      className="absolute border border-[rgba(40,70,107,0.46)] border-solid inset-0 pointer-events-none rounded-[14px]"
-                    />
-                    <p
-                      className="font-semibold leading-[15px] text-[#535b6a] text-[10px] tracking-[0.5px] uppercase"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
-                      License #
-                    </p>
-                    <input
-                      type="text"
-                      value={formData.licenseNumber}
-                      onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
-                      className="font-medium leading-[20px] text-[#2a1a1a] text-[14px] bg-transparent border-none outline-none w-full"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    />
-                  </div>
-
-                  <div className="bg-white flex flex-col gap-[4px] pb-[12px] pt-[13px] px-[15px] rounded-[14px] flex-1 relative">
-                    <div
-                      aria-hidden="true"
-                      className="absolute border border-[rgba(40,70,107,0.46)] border-solid inset-0 pointer-events-none rounded-[14px]"
-                    />
-                    <p
-                      className="font-semibold leading-[15px] text-[#535b6a] text-[10px] tracking-[0.5px] uppercase"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
-                      License type
-                    </p>
-                    <input
-                      type="text"
-                      value={formData.licenseType}
-                      onChange={(e) => setFormData({ ...formData, licenseType: e.target.value })}
-                      placeholder="MD, LCSW…"
-                      className="font-medium leading-[20px] text-[#2a1a1a] text-[14px] bg-transparent border-none outline-none w-full placeholder:text-[#aaa]"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    />
-                  </div>
-                </div>
-
-                {/* License state and specialty */}
-                <div className="flex gap-[8px]">
-                  <div className="bg-white flex flex-col gap-[4px] pb-[12px] pt-[13px] px-[15px] rounded-[14px] flex-1 relative">
-                    <div
-                      aria-hidden="true"
-                      className="absolute border border-[rgba(40,70,107,0.46)] border-solid inset-0 pointer-events-none rounded-[14px]"
-                    />
-                    <p
-                      className="font-semibold leading-[15px] text-[#535b6a] text-[10px] tracking-[0.5px] uppercase"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
-                      License state
-                    </p>
-                    <input
-                      type="text"
-                      value={formData.licenseState}
-                      onChange={(e) => setFormData({ ...formData, licenseState: e.target.value })}
-                      placeholder="Texas"
-                      className="font-medium leading-[20px] text-[#2a1a1a] text-[14px] bg-transparent border-none outline-none w-full placeholder:text-[#aaa]"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    />
-                  </div>
-
-                  <div className="bg-white flex flex-col gap-[4px] pb-[12px] pt-[13px] px-[15px] rounded-[14px] flex-1 relative">
-                    <div
-                      aria-hidden="true"
-                      className="absolute border border-[rgba(40,70,107,0.46)] border-solid inset-0 pointer-events-none rounded-[14px]"
-                    />
-                    <p
-                      className="font-semibold leading-[15px] text-[#535b6a] text-[10px] tracking-[0.5px] uppercase"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
-                      Specialty
-                    </p>
-                    <input
-                      type="text"
-                      value={formData.specialty}
-                      onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                      placeholder="Psychiatry"
-                      className="font-medium leading-[20px] text-[#2a1a1a] text-[14px] bg-transparent border-none outline-none w-full placeholder:text-[#aaa]"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {error && (
-                <p
-                  className="mt-[12px] text-[12px] leading-[18px]"
-                  style={{ color: '#c0392b', fontFamily: "'DM Sans', sans-serif" }}
-                >
-                  {error}
-                </p>
-              )}
-            </div>
-
-            {/* Bottom buttons */}
-            <div className="absolute bottom-0 w-full px-[28px] pb-[32px] pt-[20px] flex flex-col gap-[10px]">
-              <button
-                onClick={handleContinue}
-                disabled={loading}
-                className="bg-[#1b2c4b] h-[54.5px] w-full rounded-[14px] flex items-center justify-center"
-                style={{ opacity: loading ? 0.7 : 1 }}
-              >
-                <p
-                  className="font-semibold leading-[22.5px] text-[#fef6f0] text-[15px]"
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                >
-                  {loading ? 'Saving…' : 'Continue'}
-                </p>
-              </button>
-
-              <button
-                onClick={handleSaveAndExit}
-                className="h-[51px] w-full rounded-[14px] flex items-center justify-center relative"
-              >
-                <div
-                  aria-hidden="true"
-                  className="absolute border-[#1b2c4b] border-[1.5px] border-solid inset-0 pointer-events-none rounded-[14px]"
-                />
-                <p
-                  className="font-semibold leading-[20px] text-[#1b2c4b] text-[14px]"
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                >
-                  Save and exit
-                </p>
-              </button>
-            </div>
-          </div>
+        {/* Status bar */}
+        <div style={{
+          height: 51.5, flexShrink: 0,
+          paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        }}>
+          <span style={{ color: '#2A1A1A', fontSize: 13, fontWeight: 600, lineHeight: '19.5px' }}>9:41</span>
+          <span style={{ color: '#2A1A1A', fontSize: 12, fontWeight: 600, lineHeight: '16px' }}>●●●</span>
         </div>
-      </MobileContainer>
+
+        {/* Scrollable content */}
+        <div style={{ flex: '1 1 0', overflowY: 'auto', paddingLeft: 28, paddingRight: 28 }}>
+
+          {/* Back + step dots */}
+          <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button
+              onClick={() => router.back()}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1B2C4B', fontSize: 13, fontWeight: 600, lineHeight: '19.5px', padding: 0, ...f }}
+            >
+              ← Back
+            </button>
+            <StepDots current={2} total={4} label="Credentials" />
+          </div>
+
+          {/* Heading */}
+          <div style={{ marginTop: 22, fontSize: 26, lineHeight: '39px' }}>
+            <span style={{ color: '#0A0A0A', fontWeight: 400 }}>Tell us how to </span>
+            <span style={{ color: '#8A6A5A', fontWeight: 600 }}>verify you</span>
+          </div>
+
+          {/* Subtitle */}
+          <div style={{ marginTop: 6, color: '#535B6A', fontSize: 13, fontWeight: 400, lineHeight: '21.13px' }}>
+            We check this against NPPES, OIG, and your state board.
+          </div>
+
+          {/* Fields */}
+          <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+            <InputCard label="*NPI number">
+              <input type="text" value={formData.npi} onChange={set('npi')}
+                placeholder="1234567890" style={inputStyle} />
+            </InputCard>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <InputCard label="*License #">
+                  <input type="text" value={formData.licenseNumber} onChange={set('licenseNumber')} style={inputStyle} />
+                </InputCard>
+              </div>
+              <div style={{ flex: 1 }}>
+                <InputCard label="*License type">
+                  <input type="text" value={formData.licenseType} onChange={set('licenseType')}
+                    placeholder="MD, LCSW…" style={inputStyle} />
+                </InputCard>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <InputCard label="*License state">
+                  <input type="text" value={formData.licenseState} onChange={set('licenseState')}
+                    placeholder="Texas" style={inputStyle} />
+                </InputCard>
+              </div>
+              <div style={{ flex: 1 }}>
+                <InputCard label="Specialty">
+                  <input type="text" value={formData.specialty} onChange={set('specialty')}
+                    placeholder="Psychiatry" style={inputStyle} />
+                </InputCard>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{ marginTop: 12, color: '#c0392b', fontSize: 12, lineHeight: '18px' }}>
+              {error}
+            </div>
+          )}
+
+          {/* Privacy policy */}
+          <div style={{ marginTop: 16, fontSize: 11, lineHeight: '17.88px' }}>
+            <span style={{ color: '#535B6A', fontWeight: 400 }}>By continuing you agree to our </span>
+            <Link href="/privacy" target="_blank" style={{ color: '#1B2C4B', fontWeight: 600, textDecoration: 'none' }}>
+              Privacy Policy.
+            </Link>
+          </div>
+
+          <div style={{ height: 28 }} />
+        </div>
+
+        {/* Continue button */}
+        <div style={{
+          flexShrink: 0,
+          paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 28,
+        }}>
+          <button
+            onClick={handleContinue}
+            disabled={loading}
+            style={{
+              width: '100%', height: 54.5,
+              background: '#1B2C4B', borderRadius: 14, border: 'none', cursor: 'pointer',
+              color: '#FEF6F0', fontSize: 15, fontWeight: 600, lineHeight: '22.5px',
+              fontFamily: "'DM Sans', sans-serif",
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading ? 'Saving…' : 'Continue'}
+          </button>
+        </div>
+
+      </div>
     </main>
   );
 }

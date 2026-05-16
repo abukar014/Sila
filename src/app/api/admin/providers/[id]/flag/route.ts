@@ -81,6 +81,7 @@ export async function POST(
   if (provider.email) {
     const { error: emailError } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
+      reply_to: process.env.RESEND_REPLY_TO ?? 'abdi.abukar14@gmail.com',
       to: provider.email,
       subject: 'Your Sila application — account status',
       html: `

@@ -2,29 +2,48 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import MobileContainer from '@/components/MobileContainer';
-import StatusBar from '@/components/StatusBar';
-import ProgressIndicator from '@/components/ProgressIndicator';
+
+const f: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+
+function StepDots({ current, total, label }: { current: number; total: number; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {Array.from({ length: total }).map((_, i) => {
+        const active = i + 1 === current;
+        const done = i + 1 < current;
+        return (
+          <div key={i} style={{
+            width: active ? 9 : 7,
+            height: active ? 9 : 7,
+            borderRadius: '50%',
+            background: (active || done) ? '#1B2C4B' : 'rgba(40, 70, 107, 0.46)',
+            flexShrink: 0,
+          }} />
+        );
+      })}
+      <span style={{ marginLeft: 8, color: '#535B6A', fontSize: 11, fontWeight: 500, lineHeight: '16.5px', ...f }}>
+        {current} of {total} · {label}
+      </span>
+    </div>
+  );
+}
+
+const checklistItems = [
+  'Identity & email confirmed',
+  'NPI · License submitted',
+  'Profile content complete',
+  'Photo & scheduling link added',
+];
 
 export default function ReviewPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const checklistItems = [
-    'Identity & email confirmed',
-    'NPI · License submitted',
-    'Profile content complete',
-    'Photo & scheduling link added',
-  ];
-
   async function handleSubmit() {
     setError('');
     const providerId = localStorage.getItem('sila_provider_id');
-    if (!providerId) {
-      router.push('/onboarding/account');
-      return;
-    }
+    if (!providerId) { router.push('/onboarding/account'); return; }
 
     setLoading(true);
     try {
@@ -34,10 +53,7 @@ export default function ReviewPage() {
         body: JSON.stringify({ verification_status: 'pending' }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? 'Failed to submit. Please try again.');
-        return;
-      }
+      if (!res.ok) { setError(data.error ?? 'Failed to submit. Please try again.'); return; }
       router.push('/onboarding/pending');
     } catch {
       setError('Network error. Please try again.');
@@ -47,96 +63,108 @@ export default function ReviewPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <MobileContainer>
-        <div className="flex flex-col h-full w-full">
-          <StatusBar />
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#c8d5e5' }}>
+      <div style={{
+        width: 390, height: 844, padding: 1,
+        background: 'white',
+        boxShadow: '0px 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        overflow: 'hidden', borderRadius: 40,
+        outline: '1px rgba(255, 255, 255, 0.10) solid', outlineOffset: -1,
+        display: 'flex', flexDirection: 'column',
+        ...f,
+      }}>
 
-          <div className="flex flex-col flex-1 w-full px-[28px]">
-            <ProgressIndicator currentStep={4} totalSteps={4} stepLabel="Review" />
+        {/* Status bar */}
+        <div style={{
+          height: 51.5, flexShrink: 0,
+          paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        }}>
+          <span style={{ color: '#2A1A1A', fontSize: 13, fontWeight: 600, lineHeight: '19.5px' }}>9:41</span>
+          <span style={{ color: '#2A1A1A', fontSize: 12, fontWeight: 600, lineHeight: '16px' }}>●●●</span>
+        </div>
 
-            <div className="mt-[24px]">
-              <h1
-                className="font-normal italic leading-[39px] text-[#0a0a0a] text-[26px]"
-                style={{ fontFamily: "'EB Garamond', serif" }}
-              >
-                Ready to submit.
-              </h1>
-              <p
-                className="font-normal leading-[21.125px] text-[#535b6a] text-[13px] mt-[6px]"
-                style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-              >
-                Quick check before we begin verification.
-              </p>
-            </div>
+        {/* Content */}
+        <div style={{ flex: '1 1 0', display: 'flex', flexDirection: 'column', paddingLeft: 28, paddingRight: 28 }}>
 
-            <div className="flex flex-col gap-0 mt-[24px]">
-              {checklistItems.map((item, index) => (
-                <div key={index} className="flex items-center gap-[12px] py-[8px]">
-                  <div className="bg-[#1b2c4b] rounded-full size-[20px] flex items-center justify-center shrink-0">
-                    <p
-                      className="font-bold leading-[16.5px] text-[11px] text-white"
-                      style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                    >
-                      ✓
-                    </p>
-                  </div>
-                  <p
-                    className="font-normal leading-[19.5px] text-[#2a1a1a] text-[13px]"
-                    style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-                  >
-                    {item}
-                  </p>
+          {/* Back + step dots */}
+          <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button
+              onClick={() => router.back()}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1B2C4B', fontSize: 13, fontWeight: 600, lineHeight: '19.5px', padding: 0, ...f }}
+            >
+              ← Back
+            </button>
+            <StepDots current={4} total={4} label="Review" />
+          </div>
+
+          {/* Heading */}
+          <div style={{ marginTop: 22, fontSize: 26, lineHeight: '39px' }}>
+            <span style={{ color: '#0A0A0A', fontWeight: 400 }}>Ready to </span>
+            <span style={{ color: '#8A6A5A', fontWeight: 600 }}>submit</span>
+          </div>
+
+          {/* Subtitle */}
+          <div style={{ marginTop: 6, color: '#535B6A', fontSize: 13, fontWeight: 400, lineHeight: '21.13px' }}>
+            Quick check before we begin verification.
+          </div>
+
+          {/* Checklist */}
+          <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column' }}>
+            {checklistItems.map((item) => (
+              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 8 }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', background: '#1B2C4B', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ color: 'white', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>
                 </div>
-              ))}
+                <span style={{ color: '#2A1A1A', fontSize: 13, fontWeight: 400, lineHeight: '19.5px' }}>{item}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* What happens next card */}
+          <div style={{
+            marginTop: 16,
+            background: '#FEF0E6', borderRadius: 14,
+            outline: '1px #F0D8C8 solid', outlineOffset: -1,
+            padding: '14px 16px 14px',
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            <div style={{ color: '#1B2C4B', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6, lineHeight: '15px' }}>
+              What happens next
             </div>
-
-            <div className="bg-[#e0eeff] rounded-[14px] px-[16px] pt-[14px] pb-[14px] mt-[16px]">
-              <p
-                className="font-semibold leading-[15px] text-[#1b2c4b] text-[10px] tracking-[0.6px] uppercase mb-[6px]"
-                style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-              >
-                What happens next
-              </p>
-              <p
-                className="font-normal leading-[19.5px] text-[#2a1a1a] text-[12px]"
-                style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 9" }}
-              >
-                Automated checks run immediately. Human review of your state license takes up to 3
-                business days. We&apos;ll email you when you&apos;re live.
-              </p>
-            </div>
-
-            {error && (
-              <p
-                className="mt-[12px] text-[12px] leading-[18px]"
-                style={{ color: '#c0392b', fontFamily: "'DM Sans', sans-serif" }}
-              >
-                {error}
-              </p>
-            )}
-
-            {/* Spacer pushes button to bottom */}
-            <div className="flex-1" />
-
-            <div className="pb-[32px] pt-[20px]">
-              <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="bg-[#1b2c4b] h-[54.5px] w-full rounded-[14px] flex items-center justify-center"
-                style={{ opacity: loading ? 0.7 : 1 }}
-              >
-                <p
-                  className="font-semibold leading-[22.5px] text-[#fef6f0] text-[15px]"
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontVariationSettings: "'opsz' 14" }}
-                >
-                  {loading ? 'Submitting…' : 'Submit for verification'}
-                </p>
-              </button>
+            <div style={{ color: '#2A1A1A', fontSize: 12, fontWeight: 400, lineHeight: '19.5px' }}>
+              Automated checks run immediately. Human review of your state license takes up to 3 business days. We&apos;ll email you when you&apos;re live.
             </div>
           </div>
+
+          {error && (
+            <div style={{ marginTop: 12, color: '#c0392b', fontSize: 12, lineHeight: '18px' }}>{error}</div>
+          )}
+
+          {/* Push button to bottom */}
+          <div style={{ flex: 1 }} />
+
+          <div style={{ paddingTop: 20, paddingBottom: 28 }}>
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              style={{
+                width: '100%', height: 54.5,
+                background: '#1B2C4B', borderRadius: 14, border: 'none', cursor: 'pointer',
+                color: '#FEF6F0', fontSize: 15, fontWeight: 600, lineHeight: '22.5px',
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? 'Submitting…' : 'Submit for verification'}
+            </button>
+          </div>
+
         </div>
-      </MobileContainer>
+      </div>
     </main>
   );
 }

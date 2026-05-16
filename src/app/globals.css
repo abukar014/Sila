@@ -3,6 +3,53 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Sila — Coast palette */
+  --bg:           #f5ede0;
+  --bg-elev:      #fdf6ec;
+  --bg-sunk:      #ede3d0;
+  --bg-sand:      #e8d5b0;
+  --ink:          #1a0e08;
+  --ink-mute:     #5a4030;
+  --ink-faint:    #9a7a60;
+  --line:         #e0d0b8;
+  --line-strong:  #c8b090;
+  --accent:       #c4623a;
+  --accent-teal:  #1a4040;
+  --accent-sand:  #e8d5b0;
+  --dark-bg:      #0e2a2a;
+  --dark-ink:     #f0e8d8;
+  --dark-mute:    rgba(240,232,216,0.52);
+  --dark-faint:   rgba(240,232,216,0.28);
+  --dark-line:    rgba(240,232,216,0.08);
+
+  --serif-display: 'Source Serif 4', Georgia, serif;
+  --arabic: 'Noto Naskh Arabic', serif;
+
+  /* Sila design tokens — from tokens.css */
+  --bg: #f5f1ea;
+  --bg-elev: #faf7f1;
+  --bg-sunk: #ede7dc;
+  --ink: #1f211d;
+  --ink-2: #3d4a3d;
+  --ink-mute: #6b6b62;
+  --ink-faint: #9b988e;
+  --line: #e2dccd;
+  --line-strong: #cfc6b1;
+  --accent: #3d4a3d;
+  --accent-warm: #a87d5a;
+  --accent-warm-soft: #e8d8c2;
+  --verified: #5a7a5d;
+  --danger: #b85c3a;
+  --selection: #d8cdb1;
+  --serif: "Source Serif 4", Georgia, serif;
+  --sans: "Inter Tight", system-ui, sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow-sm: 0 1px 2px rgba(40,35,25,.06);
+  --shadow-md: 0 4px 16px -4px rgba(40,35,25,.12), 0 1px 2px rgba(40,35,25,.06);
+  --shadow-lg: 0 24px 60px -20px rgba(40,35,25,.22), 0 2px 6px rgba(40,35,25,.06);
 }
 
 @theme inline {
@@ -24,3 +71,6 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.serif { font-family: var(--serif); font-weight: 400; letter-spacing: -0.005em; }
+.eyebrow { font-family: var(--sans); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-mute); }

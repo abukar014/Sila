@@ -65,6 +65,7 @@ export async function POST(
     if (decision === 'verified') {
       const { error: emailError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
+        reply_to: process.env.RESEND_REPLY_TO ?? 'abdi.abukar14@gmail.com',
         to: provider.email,
         subject: "You're live on Sila",
         html: `
@@ -103,6 +104,7 @@ export async function POST(
         `
       const { error: emailError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
+        reply_to: process.env.RESEND_REPLY_TO ?? 'abdi.abukar14@gmail.com',
         to: provider.email,
         subject: requestCorrections
           ? 'Action needed — please verify your credentials with Sila'
