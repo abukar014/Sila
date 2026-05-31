@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 type Props = {
   providerId: string
   initial: {
+    name: string | null
     npi: string | null
     dob: string | null
     license_number: string | null
@@ -17,7 +18,13 @@ type Props = {
 export default function CredentialsEditor({ providerId, initial }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const nameParts = (initial.name ?? '').trim().split(/\s+/)
+  const initialFirstName = nameParts.slice(0, -1).join(' ')
+  const initialLastName = nameParts[nameParts.length - 1] ?? ''
+
   const [fields, setFields] = useState({
+    firstName: initial.name ? initialFirstName : '',
+    lastName: initial.name ? initialLastName : '',
     npi: initial.npi ?? '',
     dob: initial.dob ?? '',
     license_number: initial.license_number ?? '',
@@ -38,10 +45,15 @@ export default function CredentialsEditor({ providerId, initial }: Props) {
     setSaving(true)
     setError('')
     try {
+      const { firstName, lastName, ...credentialFields } = fields
+      const payload: Record<string, string> = { ...credentialFields }
+      const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ')
+      if (fullName) payload.name = fullName
+
       const res = await fetch(`/api/admin/providers/${providerId}/credentials`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fields),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -84,6 +96,26 @@ export default function CredentialsEditor({ providerId, initial }: Props) {
           <p className="text-xs leading-relaxed" style={{ color: '#444' }}>
             Use this to correct submitted credential data before re-running checks. All edits are logged.
           </p>
+
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: '#555' }}>Name</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                placeholder="First name"
+                value={fields.firstName}
+                onChange={e => set('firstName', e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <input
+                type="text"
+                placeholder="Last name"
+                value={fields.lastName}
+                onChange={e => set('lastName', e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+          </div>
 
           {[
             { key: 'npi', label: 'NPI', placeholder: '10-digit NPI' },

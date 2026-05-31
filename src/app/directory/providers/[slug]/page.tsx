@@ -42,6 +42,7 @@ type Provider = {
   fee_couples: string | null;
   fee_initial: string | null;
   visit_type: string | null;
+  photo_url: string | null;
 };
 
 function initials(name: string) {
@@ -143,8 +144,11 @@ export default function ProviderDetailPage({ params }: { params: Promise<{ slug:
 
           {/* Provider header */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 72, height: 72, background: '#E0EEFF', borderRadius: '50%', outline: '1px #CECECE solid', outlineOffset: -1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: '#1B2C4B', fontSize: 26, fontFamily: 'var(--font-eb-garamond), serif', fontStyle: 'italic', fontWeight: 400 }}>{init}</span>
+            <div style={{ width: 72, height: 72, background: '#E0EEFF', borderRadius: '50%', outline: '1px #CECECE solid', outlineOffset: -1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {provider.photo_url
+                ? <img src={provider.photo_url} alt={provider.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span style={{ color: '#1B2C4B', fontSize: 26, fontFamily: 'var(--font-eb-garamond), serif', fontStyle: 'italic', fontWeight: 400 }}>{init}</span>
+              }
             </div>
             <div style={{ textAlign: 'center', color: '#2A1A1A', fontSize: 22, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, lineHeight: '30px' }}>{provider.name}</div>
             <div style={{ textAlign: 'center', color: '#535B6A', fontSize: 13, fontFamily: "'DM Sans', sans-serif", fontWeight: 400 }}>{title}</div>

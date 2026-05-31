@@ -94,6 +94,7 @@ export default async function ProviderDetailPage({
           <CredentialsEditor
             providerId={provider.id}
             initial={{
+              name: provider.name,
               npi: provider.npi,
               dob: provider.dob,
               license_number: provider.license_number,
@@ -117,12 +118,18 @@ export default async function ProviderDetailPage({
               providerId={provider.id}
               initialLogs={logs ?? []}
               isExcluded
+              providerState={provider.state}
+              licenseType={provider.license_type}
+              specialties={provider.specialties ?? []}
             />
           </div>
         ) : (
           <VerificationPanel
             providerId={provider.id}
             initialLogs={logs ?? []}
+            providerState={provider.state}
+            licenseType={provider.license_type}
+            specialties={provider.specialties ?? []}
           />
         )}
       </div>

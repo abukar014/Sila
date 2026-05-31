@@ -64,20 +64,31 @@ export async function POST(
     const nppesFullName = `${r.basic?.first_name ?? ''} ${r.basic?.last_name ?? ''}`.trim()
     const nppesCredential = (r.basic?.credential ?? '').toUpperCase().replace(/\./g, '')
     const taxonomy = r.taxonomies?.[0]?.desc ?? 'N/A'
-    const nppesStates: string[] = [...new Set(
-      (r.addresses ?? []).map((a: { state?: string }) => a.state).filter(Boolean)
+    const nppesStates: string[] = [...new Set<string>(
+      ((r.addresses ?? []) as { state?: string }[]).map((a) => a.state ?? '').filter(Boolean)
     )]
 
     const mismatches: string[] = []
 
-    // Name check — submitted name should contain NPPES last name
+    // Name check — last name must match; first name must match or share first 3 chars (covers nicknames)
     const submittedNameClean = provider.name
       .toLowerCase()
       .replace(/,?\s*(md|do|phd|lcsw|lpc|lmft|dnp|np|rn|pa|dds|dmd|pharmd|psyd|ms|ma)\b/gi, '')
       .trim()
 
-    if (nppesLastName && !submittedNameClean.includes(nppesLastName) && !submittedNameClean.includes(nppesFirstName)) {
-      mismatches.push(`Name: submitted "${provider.name}" — NPPES shows "${nppesFullName}"`)
+    const submittedFirstWord = submittedNameClean.split(/\s+/)[0] ?? ''
+
+    const lastNameMatch = !nppesLastName || submittedNameClean.includes(nppesLastName)
+    const firstNameMatch = !nppesFirstName || (
+      submittedNameClean.includes(nppesFirstName) ||
+      (nppesFirstName.length >= 3 && submittedFirstWord.startsWith(nppesFirstName.slice(0, 3))) ||
+      (submittedFirstWord.length >= 3 && nppesFirstName.startsWith(submittedFirstWord.slice(0, 3)))
+    )
+
+    if (!lastNameMatch) {
+      mismatches.push(`Name: last name mismatch — submitted "${provider.name}", NPPES shows "${nppesFullName}"`)
+    } else if (!firstNameMatch) {
+      mismatches.push(`Name: first name mismatch — submitted "${provider.name}", NPPES shows "${nppesFullName}"`)
     }
 
     // State check — normalize submitted state to abbreviation, check against all NPPES addresses

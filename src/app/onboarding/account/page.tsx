@@ -108,6 +108,7 @@ export default function AccountPage() {
           name: formData.fullName,
           email: formData.email,
           user_id: authData.user.id,
+          dob: formData.dob || null,
         }),
       });
       const data = await res.json();

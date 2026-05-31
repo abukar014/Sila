@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('providers')
-    .select('id, slug, name, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, visit_type')
+    .select('id, slug, name, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, visit_type, photo_url')
     .eq('verification_status', 'verified')
     .eq('status', 'active')
     .order('name', { ascending: true })

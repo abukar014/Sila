@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function POST(request: NextRequest) {
-  const { name, email, user_id } = await request.json()
+  const { name, email, user_id, dob } = await request.json()
 
   if (!name || !email || !user_id) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
       name,
       email,
       slug,
+      dob: dob ?? null,
       status: 'inactive',
-      verification_status: 'pending',
+      verification_status: 'incomplete',
       accepting_clients: false,
     })
     .select('id')

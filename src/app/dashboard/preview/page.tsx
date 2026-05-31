@@ -54,6 +54,7 @@ type Provider = {
   fee_initial: string | null;
   visit_type: string | null;
   verification_status: string;
+  photo_url: string | null;
 };
 
 function initials(name: string) {
@@ -135,8 +136,12 @@ export default function ProfilePreviewPage() {
             <div style={{
               width: 72, height: 72, borderRadius: '50%', background: '#E0EEFF',
               display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+              overflow: 'hidden', flexShrink: 0,
             }}>
-              <span style={{ color: '#1B2C4B', fontSize: 24, fontFamily: "'EB Garamond', serif", fontStyle: 'italic' }}>{init}</span>
+              {provider.photo_url
+                ? <img src={provider.photo_url} alt={provider.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span style={{ color: '#1B2C4B', fontSize: 24, fontFamily: "'EB Garamond', serif", fontStyle: 'italic' }}>{init}</span>
+              }
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <span style={{ color: '#2A1A1A', fontSize: 17, fontWeight: 600, lineHeight: '25.5px' }}>{provider.name}</span>

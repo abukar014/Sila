@@ -35,6 +35,7 @@ type Provider = {
   fee_individual: string | null;
   fee_couples: string | null;
   fee_initial: string | null;
+  photo_url: string | null;
 };
 
 function initials(name: string) {
@@ -83,8 +84,11 @@ function ProviderCard({ p, onClick }: { p: Provider; onClick: () => void }) {
       }}
     >
       <div style={{ alignSelf: 'stretch', justifyContent: 'flex-start', alignItems: 'flex-start', gap: 11.08, display: 'inline-flex' }}>
-        <div style={{ width: 34.84, height: 34.84, background: '#E0EEFF', borderRadius: '50%', justifyContent: 'center', alignItems: 'center', display: 'flex', flexShrink: 0 }}>
-          <div style={{ color: '#1B2C4B', fontSize: 12.67, fontFamily: 'var(--font-eb-garamond), serif', fontStyle: 'italic', fontWeight: 400, lineHeight: '19px' }}>{init}</div>
+        <div style={{ width: 34.84, height: 34.84, background: '#E0EEFF', borderRadius: '50%', justifyContent: 'center', alignItems: 'center', display: 'flex', flexShrink: 0, overflow: 'hidden' }}>
+          {p.photo_url
+            ? <img src={p.photo_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <div style={{ color: '#1B2C4B', fontSize: 12.67, fontFamily: 'var(--font-eb-garamond), serif', fontStyle: 'italic', fontWeight: 400, lineHeight: '19px' }}>{init}</div>
+          }
         </div>
         <div style={{ flex: '1 1 0' }}>
           <div style={{ color: 'black', fontSize: 11.88, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, lineHeight: '17.81px' }}>{p.name}</div>
@@ -128,8 +132,11 @@ function Popup({ p, onClose }: { p: Provider; onClose: () => void }) {
       <div style={{ width: 332, height: 415, left: 30, top: 241, position: 'absolute', background: 'white', borderRadius: 12.52, outline: '0.78px #8CA3CD solid', outlineOffset: -0.78, overflow: 'hidden', animation: 'sila-card-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
 
         <div style={{ width: 305.4, left: 13.3, top: 13.3, position: 'absolute', justifyContent: 'flex-start', alignItems: 'flex-start', gap: 10.95, display: 'inline-flex' }}>
-          <div style={{ width: 34.42, height: 34.42, background: '#E0EEFF', borderRadius: '50%', justifyContent: 'center', alignItems: 'center', display: 'flex', flexShrink: 0 }}>
-            <div style={{ color: '#1B2C4B', fontSize: 12.52, fontFamily: 'var(--font-eb-garamond), serif', fontStyle: 'italic', fontWeight: 400 }}>{init}</div>
+          <div style={{ width: 34.42, height: 34.42, background: '#E0EEFF', borderRadius: '50%', justifyContent: 'center', alignItems: 'center', display: 'flex', flexShrink: 0, overflow: 'hidden' }}>
+            {p.photo_url
+              ? <img src={p.photo_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <div style={{ color: '#1B2C4B', fontSize: 12.52, fontFamily: 'var(--font-eb-garamond), serif', fontStyle: 'italic', fontWeight: 400 }}>{init}</div>
+            }
           </div>
           <div style={{ flex: '1 1 0' }}>
             <div style={{ color: '#2A1A1A', fontSize: 14, fontFamily: "'DM Sans', sans-serif", fontWeight: 600 }}>{p.name}</div>

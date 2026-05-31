@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { Resend } from 'resend'
+import { emailTemplate, emailHeading, emailP, emailList, emailDivider, emailSignature } from '@/lib/emailTemplate'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -9,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { decision, notes, requestCorrections = false } = await request.json()
+  const { decision, notes, requestCorrections = false, failedChecks = [] } = await request.json()
 
   // Never overwrite an exclusion
   const { data: current } = await supabaseAdmin
@@ -33,7 +34,7 @@ export async function POST(
     updates.status = 'active'
   }
 
-  if (decision === 'in_review') {
+  if (decision === 'in_review' || decision === 'rejected') {
     updates.verified = false
     updates.status = 'inactive'
   }
@@ -62,56 +63,74 @@ export async function POST(
     .single()
 
   if (provider?.email) {
+    const firstName = provider.name.split(' ')[0]
+    const from = process.env.RESEND_FROM_EMAIL ?? 'noreply@silacare.health'
+    const replyTo = process.env.RESEND_REPLY_TO ?? 'hello@silacare.health'
+
     if (decision === 'verified') {
       const { error: emailError } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
-        reply_to: process.env.RESEND_REPLY_TO ?? 'abdi.abukar14@gmail.com',
+        from, replyTo,
         to: provider.email,
-        subject: "You're live on Sila",
-        html: `
-          <p>Hi ${provider.name},</p>
-          <p>Your profile has been verified and is now live on Sila. Clients can find you in the directory.</p>
-          <p>If you need to update your profile or scheduling link, sign in to your provider dashboard.</p>
-          <p>— The Sila Team</p>
-        `,
+        subject: "You're in.",
+        html: emailTemplate(
+          emailHeading(`Welcome to Sila, ${firstName}.`) +
+          emailP(`We reviewed your application and we're really glad to say — you're approved. Your profile is live on Sila right now.`) +
+          emailP(`Clients looking for someone like you can already find you in the directory. If you want to update anything before more eyes find it, sign in and make any changes you'd like.`) +
+          emailDivider() +
+          emailP(`We're so glad you're here. Genuinely.`) +
+          emailSignature()
+        ),
       })
-      if (emailError) console.error('Resend approval email error:', emailError)
+      if (emailError) console.error('[decision] approval email failed:', emailError)
     }
 
     if (decision === 'in_review') {
-      const html = requestCorrections
-        ? `
-          <p>Hi ${provider.name},</p>
-          <p>Thank you for applying to Sila. During our review we encountered an issue verifying one or more of your submitted credentials (NPI, license number, or date of birth).</p>
-          <p><strong>We need you to send us your correct information so we can complete your verification.</strong> Please reply to this email with the following:</p>
-          <ul>
-            <li>Full legal name (as it appears on your license)</li>
-            <li>NPI number</li>
-            <li>Date of birth (MM/DD/YYYY)</li>
-            <li>License number and type</li>
-            <li>State of licensure</li>
-          </ul>
-          <p>Once we receive and verify the corrected details, we'll update your application and be in touch within 2–3 business days.</p>
-          <p>If you believe your original submission was correct, reply and let us know — we're happy to take another look.</p>
-          <p>— The Sila Team</p>
-        `
-        : `
-          <p>Hi ${provider.name},</p>
-          <p>Thank you for your patience. Your application is currently undergoing additional verification and our team is reviewing it carefully.</p>
-          <p>You don't need to do anything right now. We'll be in touch within 2–3 business days once our review is complete.</p>
-          <p>If you have questions in the meantime, reply to this email and we'll get back to you.</p>
-          <p>— The Sila Team</p>
-        `
       const { error: emailError } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
-        reply_to: process.env.RESEND_REPLY_TO ?? 'abdi.abukar14@gmail.com',
+        from, replyTo,
         to: provider.email,
         subject: requestCorrections
-          ? 'Action needed — please verify your credentials with Sila'
-          : 'Your Sila application — additional review underway',
-        html,
+          ? 'Quick question about your Sila application'
+          : 'Your Sila application',
+        html: requestCorrections
+          ? emailTemplate(
+              emailHeading(`Hi ${firstName}, we just have a quick question.`) +
+              emailP(`We're still working through your application and want to make sure we have everything right before we move forward. Could you reply with the following so we can take another look:`) +
+              emailList([
+                'Full legal name as it appears on your license',
+                'NPI number',
+                'Date of birth',
+                'License number, type, and state',
+              ]) +
+              emailP(`Once we hear back we'll pick it right back up.`) +
+              emailSignature()
+            )
+          : emailTemplate(
+              emailHeading(`Hi ${firstName}, we're still on it.`) +
+              emailP(`We're still working through your application and will be in touch within 1 to 3 business days. You don't need to do anything right now.`) +
+              emailP(`If you have questions in the meantime, just reply to this email.`) +
+              emailSignature()
+            ),
       })
-      if (emailError) console.error('Resend in-review email error:', emailError)
+      if (emailError) console.error('[decision] in_review email failed:', emailError)
+    }
+
+    if (decision === 'rejected') {
+      const { error: emailError } = await resend.emails.send({
+        from, replyTo,
+        to: provider.email,
+        subject: 'Your Sila application',
+        html: emailTemplate(
+          emailHeading(`Hi ${firstName}.`) +
+          emailP(`We're sorry it didn't work out this time. After completing our review we weren't able to verify the following and can't move your application forward:`) +
+          ((failedChecks as string[]).length > 0
+            ? emailList(failedChecks as string[])
+            : '') +
+          emailP(`We know that's not easy to hear and we're sorry we couldn't make it work this time.`) +
+          emailP(`If you believe something was submitted incorrectly or you have questions about what we found, please reply to this email. We're happy to talk through it.`) +
+          emailSignature()
+        ),
+      })
+      if (emailError) console.error('[decision] rejection email failed:', emailError)
     }
   }
 

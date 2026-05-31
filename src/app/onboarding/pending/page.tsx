@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const f: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -8,11 +9,32 @@ const steps = [
   { title: 'NPPES identity match', status: 'Confirmed · 12s', done: true },
   { title: 'OIG exclusion list', status: 'No exclusions found', done: true },
   { title: 'SAM.gov check', status: 'Clear', done: true },
-  { title: 'Texas state license', status: 'Awaiting reviewer', done: false },
+  { title: 'State license review', status: 'Awaiting reviewer', done: false },
 ];
 
 export default function PendingPage() {
   const router = useRouter();
+
+  useEffect(() => {
+    const providerId = localStorage.getItem('sila_provider_id');
+    if (!providerId) return;
+
+    async function checkStatus() {
+      const res = await fetch(`/api/onboarding/${providerId}`).catch(() => null);
+      if (!res?.ok) return;
+      const data = await res.json();
+      const vs = data.verification_status;
+      if (vs === 'verified' && data.status === 'active') {
+        router.push('/dashboard');
+      } else if (vs === 'excluded' || vs === 'rejected' || vs === 'in_review') {
+        router.push('/dashboard');
+      }
+    }
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 30_000);
+    return () => clearInterval(interval);
+  }, [router]);
 
   return (
     <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#c8d5e5' }}>
@@ -89,23 +111,10 @@ export default function PendingPage() {
             </div>
 
             {/* Footer note */}
-            <div style={{ marginTop: 16, textAlign: 'center', color: 'white', fontSize: 12, fontWeight: 400, lineHeight: '16px' }}>
-              We&apos;ll email you when complete.
+            <div style={{ marginTop: 16, textAlign: 'center', color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 400, lineHeight: '19px' }}>
+              We&apos;ll bring you right in when you&apos;re approved.<br />You can close the app — we&apos;ll handle the rest.
             </div>
           </div>
-
-          {/* CTA */}
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{
-              width: '100%', height: 54.5,
-              background: '#1B2C4B', borderRadius: 14, border: 'none', cursor: 'pointer',
-              color: '#FEF6F0', fontSize: 15, fontWeight: 600, lineHeight: '22.5px',
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
-            Close and check back later
-          </button>
 
         </div>
       </div>

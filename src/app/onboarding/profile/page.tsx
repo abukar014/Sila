@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const f: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -28,9 +28,9 @@ function StepDots({ current, total, label }: { current: number; total: number; l
   );
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Card({ children, style, onClick }: { children: React.ReactNode; style?: React.CSSProperties; onClick?: () => void }) {
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: 'white', borderRadius: 14,
       outline: '1px rgba(40, 70, 107, 0.46) solid', outlineOffset: -1,
       ...style,
@@ -73,8 +73,11 @@ export default function ProfilePage() {
   const [feeIndividual, setFeeIndividual] = useState('');
   const [feeCouples, setFeeCouples] = useState('');
   const [feeInitial, setFeeInitial] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function removeInsurance(index: number) {
     setInsurancePlans((p) => p.filter((_, i) => i !== index));
@@ -91,8 +94,33 @@ export default function ProfilePage() {
     setShowPlanInput(false);
   }
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const providerId = localStorage.getItem('sila_provider_id');
+    if (!providerId) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('photo', file);
+      const res = await fetch(`/api/onboarding/${providerId}/photo`, { method: 'POST', body: form });
+      const data = await res.json();
+      if (res.ok) setPhotoUrl(data.url);
+      else setError(data.error ?? 'Photo upload failed.');
+    } catch {
+      setError('Photo upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const canContinue = photoUrl.length > 0 && bio.trim().length > 0 && schedulingUrl.trim().length > 0;
+
   async function handleContinue() {
     setError('');
+    if (!photoUrl) { setError('Please upload a photo so clients know who they\'re reaching out to.'); return; }
+    if (!bio.trim()) { setError('Please add a bio so clients know who they\'re reaching out to.'); return; }
+    if (!schedulingUrl.trim()) { setError('Please add a scheduling link so clients can book with you.'); return; }
     const providerId = localStorage.getItem('sila_provider_id');
     if (!providerId) { router.push('/onboarding/account'); return; }
 
@@ -157,6 +185,7 @@ export default function ProfilePage() {
               ← Back
             </button>
             <StepDots current={3} total={4} label="Profile" />
+
           </div>
 
           {/* Heading */}
@@ -169,16 +198,31 @@ export default function ProfilePage() {
           <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* Photo upload */}
-            <Card style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handlePhotoChange}
+            />
+            <Card
+              style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', opacity: uploading ? 0.6 : 1 }}
+              onClick={() => fileInputRef.current?.click()}
+            >
               <div style={{
                 width: 44, height: 44, borderRadius: '50%', background: '#E0EEFF', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
               }}>
-                <span style={{ color: '#1B2C4B', fontSize: 16, fontFamily: "'EB Garamond', serif", fontStyle: 'italic' }}>AR</span>
+                {photoUrl
+                  ? <img src={photoUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ color: '#1B2C4B', fontSize: 16, fontFamily: "'EB Garamond', serif", fontStyle: 'italic' }}>AR</span>
+                }
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={labelStyle}>Photo</div>
-                <div style={{ color: '#535B6A', fontSize: 14, fontWeight: 400, lineHeight: '20px', ...f }}>Tap to upload</div>
+                <div style={labelStyle}>Photo <span style={{ color: '#c0392b' }}>*</span></div>
+                <div style={{ color: '#535B6A', fontSize: 14, fontWeight: 400, lineHeight: '20px', ...f }}>
+                  {uploading ? 'Uploading…' : photoUrl ? 'Tap to change' : 'Tap to upload'}
+                </div>
               </div>
             </Card>
 
@@ -203,7 +247,7 @@ export default function ProfilePage() {
 
             {/* Bio */}
             <Card style={{ padding: '13px 15px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={labelStyle}>Bio</div>
+              <div style={labelStyle}>Bio <span style={{ color: '#c0392b' }}>*</span></div>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
@@ -215,7 +259,7 @@ export default function ProfilePage() {
 
             {/* Scheduling link */}
             <Card style={{ padding: '13px 15px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={labelStyle}>Scheduling link</div>
+              <div style={labelStyle}>Scheduling link <span style={{ color: '#c0392b' }}>*</span></div>
               <input type="url" value={schedulingUrl} onChange={(e) => setSchedulingUrl(e.target.value)}
                 placeholder="calendly.com/your-name" style={inputStyle} />
             </Card>
@@ -318,13 +362,13 @@ export default function ProfilePage() {
         }}>
           <button
             onClick={handleContinue}
-            disabled={loading}
+            disabled={loading || !canContinue}
             style={{
               width: '100%', height: 54.5,
-              background: '#1B2C4B', borderRadius: 14, border: 'none', cursor: 'pointer',
+              background: '#1B2C4B', borderRadius: 14, border: 'none', cursor: canContinue && !loading ? 'pointer' : 'default',
               color: '#FEF6F0', fontSize: 15, fontWeight: 600, lineHeight: '22.5px',
               fontFamily: "'DM Sans', sans-serif",
-              opacity: loading ? 0.7 : 1,
+              opacity: loading || !canContinue ? 0.4 : 1,
             }}
           >
             {loading ? 'Saving…' : 'Continue'}

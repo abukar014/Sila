@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const ALLOWED_FIELDS = ['npi', 'dob', 'license_number', 'license_type', 'state'] as const
+const ALLOWED_FIELDS = ['npi', 'dob', 'license_number', 'license_type', 'state', 'name'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
 
 export async function PATCH(
@@ -39,5 +40,6 @@ export async function PATCH(
     raw_output: `Admin corrected: ${changed.join(', ')}`,
   })
 
+  revalidatePath(`/admin/providers/${id}`)
   return NextResponse.json({ success: true, updated: Object.keys(updates) })
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { Resend } from 'resend'
+import { emailTemplate, emailHeading, emailP, emailList, emailDivider, emailSignature } from '@/lib/emailTemplate'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -81,20 +82,23 @@ export async function POST(
   if (provider.email) {
     const { error: emailError } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
-      reply_to: process.env.RESEND_REPLY_TO ?? 'abdi.abukar14@gmail.com',
+      replyTo: process.env.RESEND_REPLY_TO ?? 'hello@silacare.health',
       to: provider.email,
       subject: 'Your Sila application — account status',
-      html: `
-        <p>Hi ${provider.name},</p>
-        <p>Thank you for applying to join the Sila provider directory. After completing our credentialing review, we are unable to approve your application.</p>
-        <p>During our review, your information was matched against federal exclusion registries maintained by the U.S. Department of Health and Human Services:</p>
-        <ul style="margin: 12px 0; padding-left: 20px; color: #444;">
-          ${exclusionDetails || `<li>${reason ?? 'Confirmed match on a federal exclusion list'}</li>`}
-        </ul>
-        <p>As a result, your account has been marked ineligible and your NPI has been flagged in our system. You will not be able to register again using this NPI.</p>
-        <p>If you believe this is an error, please reply to this email with supporting documentation and our team will review your case within 5 business days.</p>
-        <p>— The Sila Team</p>
-      `,
+      html: emailTemplate(
+        emailHeading(`Hi ${provider.name.split(' ')[0]}.`) +
+        emailP(`Thank you for applying to join the Sila provider directory. After completing our credentialing review, we are unable to approve your application.`) +
+        emailP(`During our review, your information was matched against federal exclusion registries maintained by the U.S. Department of Health and Human Services:`) +
+        emailList(
+          exclusionDetails
+            ? [exclusionDetails]
+            : [reason ?? 'Confirmed match on a federal exclusion list']
+        ) +
+        emailP(`As a result, your account has been marked ineligible and your NPI has been flagged in our system. You will not be able to register again using this NPI.`) +
+        emailDivider() +
+        emailP(`If you believe this is an error, please reply to this email with supporting documentation and our team will review your case within 5 business days.`) +
+        emailSignature()
+      ),
     })
     if (emailError) console.error('Resend exclusion email error:', emailError.message)
   }

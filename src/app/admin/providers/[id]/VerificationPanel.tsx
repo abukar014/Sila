@@ -23,6 +23,113 @@ const CHECK_META = {
   sam: { label: 'SAM.gov', description: 'Check federal exclusions list' },
 }
 
+type BoardLink = { label: string; url: string; types?: string[] }
+
+const STATE_BOARDS: Record<string, BoardLink[]> = {
+  TX: [
+    { label: 'TX Medical Board', url: 'https://www.tmb.state.tx.us/page/lookup-physician', types: ['MD', 'DO'] },
+    { label: 'TX BHEC', url: 'https://bhec.texas.gov/verify-a-license/', types: ['LPC', 'LCDC', 'LCSW', 'LMFT'] },
+    { label: 'TX Board of Nursing', url: 'https://www.bon.texas.gov/licensure_verification.asp', types: ['RN', 'NP', 'APRN'] },
+    { label: 'TX Psychologists Board', url: 'https://www.tsbep.texas.gov/page/licensee-search', types: ['PhD', 'PsyD', 'LP'] },
+  ],
+  CA: [
+    { label: 'CA Medical Board', url: 'https://search.dca.ca.gov/', types: ['MD', 'DO'] },
+    { label: 'CA BBS (LCSW/MFT/LPCC)', url: 'https://search.dca.ca.gov/', types: ['LCSW', 'LMFT', 'LPCC', 'AMFT', 'ASW'] },
+    { label: 'CA Board of Psychology', url: 'https://search.dca.ca.gov/', types: ['PhD', 'PsyD', 'LP'] },
+    { label: 'CA Board of Nursing', url: 'https://www.rn.ca.gov/consumers/lic_lookup.shtml', types: ['RN', 'NP', 'APRN'] },
+  ],
+  NY: [
+    { label: 'NY Office of Professions', url: 'https://www.op.nysed.gov/opsearches.htm' },
+  ],
+  FL: [
+    { label: 'FL DOH License Verification', url: 'https://mqa.doh.state.fl.us/MQASearchServices/HealthCareProviders' },
+  ],
+  IL: [
+    { label: 'IL IDFPR License Lookup', url: 'https://online-dfpr.micropact.com/lookup/licenselookup.aspx' },
+  ],
+  NJ: [
+    { label: 'NJ License Verification', url: 'https://newjersey.mylicense.com/verification/Search.aspx' },
+  ],
+  MI: [
+    { label: 'MI License Lookup', url: 'https://aca-prod.accela.com/MILARA/GeneralProperty/PropertyLookUp.aspx' },
+  ],
+  VA: [
+    { label: 'VA Dept of Health Professions', url: 'https://dhp.virginiainteractive.org/lookup/index' },
+  ],
+  GA: [
+    { label: 'GA Composite Medical Board', url: 'https://gcmb.mylicense.com/verification/' },
+  ],
+  NC: [
+    { label: 'NC Medical Board', url: 'https://www.ncmedboard.org/resources-information/professional-license-information/license-verification', types: ['MD', 'DO'] },
+    { label: 'NC Counseling Board', url: 'https://www.ncblpc.org/Verification/', types: ['LPC', 'LCAS', 'CCS'] },
+    { label: 'NC Social Work Board', url: 'https://www.ncswboard.gov/verification/', types: ['LCSW', 'LCSWA', 'LSW'] },
+  ],
+  WA: [
+    { label: 'WA DOH License Lookup', url: 'https://fortress.wa.gov/doh/providercredentialsearch/' },
+  ],
+  OH: [
+    { label: 'OH eLicense', url: 'https://elicense.ohio.gov/oh_verifylicense' },
+  ],
+  PA: [
+    { label: 'PA License Verification', url: 'https://www.dos.pa.gov/ProfessionalLicensing/Pages/Verification-of-Licensure.aspx' },
+  ],
+  MD: [
+    { label: 'MD Board Verification', url: 'https://www.mdbon.org/license-verification' },
+  ],
+  MN: [
+    { label: 'MN License Lookup', url: 'https://mn.gov/boards/health-professional-services/public/license-lookup/' },
+  ],
+  AZ: [
+    { label: 'AZ Medical Board', url: 'https://azmdboard.ent.sirsi.net/client/en_US/default/', types: ['MD', 'DO'] },
+    { label: 'AZ Board of Behavioral Health', url: 'https://bhe.az.gov/license-verification', types: ['LPC', 'LCSW', 'LMFT'] },
+  ],
+  CO: [
+    { label: 'CO DORA License Lookup', url: 'https://apps2.colorado.gov/dora/licensing/lookup/licenselookup.aspx' },
+  ],
+}
+
+function getStateBoardLinks(state: string, licenseType: string, specialties: string[]): BoardLink[] {
+  const boards = STATE_BOARDS[state?.toUpperCase()] ?? []
+  if (!boards.length) return []
+  const lt = licenseType?.toUpperCase() ?? ''
+  const filtered = boards.filter(b => !b.types || b.types.some(t => lt.includes(t)))
+  return filtered.length > 0 ? filtered : boards
+}
+
+function getMismatchGuidance(checkType: string, result: string, details: string, providerState: string): string | null {
+  const d = details.toLowerCase()
+  if (result === 'clear' || result === 'approved') return null
+
+  if (checkType === 'nppes') {
+    if (d.includes('not found') || d.includes('no results')) {
+      return `This NPI doesn't exist in the NPPES database. Ask the provider to confirm their NPI number is correct before re-running the check.`
+    }
+    if (d.includes('state:')) {
+      return `The NPI is registered to a different state than what was submitted. The provider may have relocated or hold a separate license in ${providerState ?? 'the submitted state'}. Check the ${providerState ?? 'submitted'} state board below to confirm they hold an active license there before approving.`
+    }
+    if (d.includes('name:')) {
+      return `The name on the application doesn't match NPPES exactly. This could be a legal name vs. preferred name difference. Ask the provider to confirm the exact name on their license before proceeding.`
+    }
+    if (d.includes('credential:')) {
+      return `The credential listed doesn't match what NPPES has on file. Verify the correct license type before approving — what they submitted may not reflect their actual credential.`
+    }
+    if (d.includes('specialty:')) {
+      return `The specialty listed differs from NPPES. This may just be a taxonomy code difference — cross-reference against their license type on the state board before making a decision.`
+    }
+    return `Review the mismatches above and cross-reference against the ${providerState ?? 'relevant'} state board before approving.`
+  }
+
+  if (checkType === 'leie') {
+    return `This provider may appear on the OIG exclusion list. Do not approve. Manually verify their identity using DOB, specialty, and address from the result above at exclusions.oig.hhs.gov, then flag and exclude if confirmed.`
+  }
+
+  if (checkType === 'sam') {
+    return `This provider may appear on the federal SAM.gov exclusion list. Do not approve. Verify their identity manually at sam.gov, then flag and exclude if confirmed.`
+  }
+
+  return null
+}
+
 const RESULT_STYLES: Record<string, { color: string; icon: string }> = {
   clear: { color: '#22c55e', icon: '✓' },
   flagged: { color: '#f59e0b', icon: '⚠' },
@@ -37,10 +144,16 @@ export default function VerificationPanel({
   providerId,
   initialLogs,
   isExcluded = false,
+  providerState,
+  licenseType,
+  specialties = [],
 }: {
   providerId: string
   initialLogs: Log[]
   isExcluded?: boolean
+  providerState?: string
+  licenseType?: string
+  specialties?: string[]
 }) {
   const router = useRouter()
   const [checkResults, setCheckResults] = useState<Partial<Record<string, CheckResult>>>({})
@@ -80,6 +193,13 @@ export default function VerificationPanel({
     }
     setLoading(prev => ({ ...prev, [type]: false }))
   }
+
+  async function runAllChecks() {
+    setLoading({ nppes: true, leie: true, sam: true })
+    await Promise.all(['nppes', 'leie', 'sam'].map(type => runCheck(type)))
+  }
+
+  const anyLoading = Object.values(loading).some(Boolean)
 
   async function handleFlag() {
     setFlagging(true)
@@ -140,6 +260,25 @@ export default function VerificationPanel({
 
   return (
     <div className="flex flex-col gap-4">
+
+      {/* Run all button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p className="text-sm font-semibold text-white">Automated Checks</p>
+        <button
+          onClick={runAllChecks}
+          disabled={anyLoading || isExcluded}
+          className="text-sm px-4 py-2 rounded-lg font-semibold transition-colors"
+          style={{
+            backgroundColor: anyLoading || isExcluded ? '#1a1a1a' : '#1e3a5f',
+            border: '1px solid #2a4a7f',
+            color: anyLoading || isExcluded ? '#555' : '#93c5fd',
+            cursor: anyLoading || isExcluded ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {anyLoading ? 'Running…' : 'Run all checks'}
+        </button>
+      </div>
+
       {/* Automated check sections */}
       {(Object.entries(CHECK_META) as [string, { label: string; description: string }][]).map(([type, meta]) => {
         const res = checkResults[type]
@@ -168,6 +307,16 @@ export default function VerificationPanel({
                 </p>
                 <p className="text-xs leading-relaxed" style={{ color: '#777' }}>{res.details}</p>
                 <p className="text-xs mt-2" style={{ color: '#444' }}>Run at {res.timestamp}</p>
+                {(() => {
+                  const guidance = getMismatchGuidance(type, res.result, res.details, providerState ?? '')
+                  if (!guidance) return null
+                  return (
+                    <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: '#1a1400', border: '1px solid #3a2e00' }}>
+                      <p className="text-xs font-semibold mb-1" style={{ color: '#f59e0b' }}>What to do next</p>
+                      <p className="text-xs leading-relaxed" style={{ color: '#a88a40' }}>{guidance}</p>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
@@ -196,24 +345,33 @@ export default function VerificationPanel({
             </button>
           )}
         </div>
-        <div className="mt-3 pt-3 flex flex-wrap gap-2" style={{ borderTop: '1px solid #1e1e1e' }}>
-          {[
-            { label: 'TX Medical Board', url: 'https://www.tmb.state.tx.us/page/lookup-physician' },
-            { label: 'TX BHEC', url: 'https://bhec.texas.gov/verify-a-license/' },
-            { label: 'TX Board of Nursing', url: 'https://www.bon.texas.gov/licensure_verification.asp' },
-            { label: 'TX Dental Board', url: 'https://www.tsbde.texas.gov/verify/' },
-          ].map(({ label, url }) => (
-            <a
-              key={label}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs px-2.5 py-1 rounded-md"
-              style={{ backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #2a2a2a' }}
-            >
-              {label} ↗
-            </a>
-          ))}
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid #1e1e1e' }}>
+          {providerState ? (
+            <>
+              <p className="text-xs mb-2" style={{ color: '#444' }}>
+                State board links for <span style={{ color: '#888' }}>{providerState}</span> based on submitted license type
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {getStateBoardLinks(providerState, licenseType ?? '', specialties).map(({ label, url }) => (
+                  <a
+                    key={label}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-2.5 py-1 rounded-md"
+                    style={{ backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #2a2a2a' }}
+                  >
+                    {label} ↗
+                  </a>
+                ))}
+                {getStateBoardLinks(providerState, licenseType ?? '', specialties).length === 0 && (
+                  <p className="text-xs" style={{ color: '#444' }}>No board links on file for {providerState}. Search manually.</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs" style={{ color: '#444' }}>No state on file — check provider profile for submitted state.</p>
+          )}
         </div>
       </div>
 
