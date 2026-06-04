@@ -117,12 +117,14 @@ export async function applyProviderDecision(
               'Date of birth',
               'License number, type, and state',
             ]) +
+            (notes ? emailP(notes) : '') +
             emailP(`Once we hear back we'll pick it right back up.`) +
             emailSignature()
           )
         : emailTemplate(
             emailHeading(`Hi ${firstName}, we're still on it.`) +
             emailP(`We're still working through your application and will be in touch within 1 to 3 business days. You don't need to do anything right now.`) +
+            (notes ? emailP(notes) : '') +
             emailP(`If you have questions in the meantime, just reply to this email.`) +
             emailSignature()
           ),
