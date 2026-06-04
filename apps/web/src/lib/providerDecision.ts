@@ -80,7 +80,8 @@ export async function applyProviderDecision(
 
   const firstName = provider.name.split(' ')[0]
   const from = process.env.RESEND_FROM_EMAIL ?? 'noreply@silacare.health'
-  const replyTo = process.env.RESEND_REPLY_TO ?? 'hello@silacare.health'
+  // Strip any non-ASCII characters that would cause Resend to reject the header
+  const replyTo = (process.env.RESEND_REPLY_TO ?? 'hello@silacare.health').replace(/[^\x20-\x7E]/g, '')
 
   if (decision === 'verified') {
     const { error: emailError } = await resend.emails.send({
