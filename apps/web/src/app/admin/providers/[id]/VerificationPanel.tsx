@@ -200,6 +200,59 @@ function getShortGuidance(checkType: string, result: string, details: string, pr
 }
 
 
+function generateNoteSuggestion(checkResults: Partial<Record<string, CheckResult>>): string {
+  const parts: string[] = []
+
+  const nppes = checkResults['nppes']
+  if (nppes && (nppes.result === 'review_required' || nppes.result === 'flagged')) {
+    const d = nppes.details
+
+    if (nppes.result === 'flagged') {
+      if (d.toLowerCase().includes('no npi')) {
+        parts.push(`We don't have an NPI on file for your application. Could you reply with your NPI number so we can complete the verification?`)
+      } else if (d.toLowerCase().includes('not found')) {
+        parts.push(`We weren't able to find your NPI in the NPPES registry. Could you double-check the number you submitted and reply with a copy of your license?`)
+      }
+    }
+
+    if (nppes.result === 'review_required') {
+      const mismatchLines = d.split('\n').filter(l => l.trim().startsWith('•')).map(l => l.replace(/^[•\s]+/, '').trim())
+      for (const line of mismatchLines) {
+        const submitted = line.match(/submitted "([^"]+)"/)?.[1]
+        const registry  = line.match(/NPPES shows "([^"]+)"/)?.[1]
+        const states    = line.match(/NPPES shows address\(es\) in (.+)/)?.[1]
+
+        if (line.startsWith('Name:') && submitted && registry) {
+          parts.push(`When we ran your NPI through NPPES, the name on file didn't match what you submitted. You applied as "${submitted}" but the registry shows "${registry}". Could you confirm the name exactly as it appears on your license?`)
+        } else if (line.startsWith('State:') && submitted && states) {
+          parts.push(`The state you listed (${submitted}) doesn't match what NPPES has on file — the registry shows ${states}. Could you confirm which state your current license is in?`)
+        } else if (line.startsWith('Credential:') && submitted && registry) {
+          parts.push(`The credential you submitted (${submitted}) doesn't match what NPPES shows for your NPI (${registry}). Could you confirm your exact license type?`)
+        }
+      }
+    }
+  }
+
+  const leie = checkResults['leie']
+  if (leie && leie.result === 'review_required') {
+    const d = leie.details.toLowerCase()
+    if (d.includes('partial name')) {
+      parts.push(`We found a partial name match in the OIG exclusion database. This is most likely a different person, but we need to rule it out before moving forward. Could you share your date of birth?`)
+    } else if (d.includes('possible match') || d.includes('high confidence')) {
+      parts.push(`We found a possible match in the OIG exclusion database. We need to confirm this isn't you before we can continue. Could you share your date of birth and license number?`)
+    } else {
+      parts.push(`We found a name match in the OIG exclusion database that we need to clear before moving forward. Could you confirm your date of birth and the state where you hold your current license?`)
+    }
+  }
+
+  const sam = checkResults['sam']
+  if (sam && sam.result === 'review_required') {
+    parts.push(`We also found a name match in the SAM.gov federal exclusions list. Could you confirm your date of birth and current license state so we can rule this out?`)
+  }
+
+  return parts.join('\n\n')
+}
+
 const RESULT_STYLES: Record<string, { color: string; icon: string }> = {
   clear: { color: '#22c55e', icon: '✓' },
   flagged: { color: '#f59e0b', icon: '⚠' },
@@ -598,7 +651,15 @@ export default function VerificationPanel({
                   {deciding ? 'Saving…' : 'Approve'}
                 </button>
                 <button
-                  onClick={() => setShowReviewInput(v => !v)}
+                  onClick={() => {
+                    setShowReviewInput(v => {
+                      if (!v && !reviewNotes.trim()) {
+                        const suggestion = generateNoteSuggestion(checkResults)
+                        if (suggestion) setReviewNotes(suggestion)
+                      }
+                      return !v
+                    })
+                  }}
                   disabled={deciding}
                   style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, backgroundColor: '#111827', color: '#93c5fd', border: '1px solid #1e3a5f', cursor: 'pointer' }}
                 >
