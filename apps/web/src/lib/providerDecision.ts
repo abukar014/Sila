@@ -110,8 +110,10 @@ export async function applyProviderDecision(
       html: requestCorrections
         ? emailTemplate(
             emailHeading(`Hi ${firstName}, we just have a quick question.`) +
-            emailP(`We're still working through your application and have one thing we need to clarify before we can move it forward.`) +
-            (notes ? emailP(notes) : emailP(`Could you reply with your full legal name as it appears on your license, NPI number, date of birth, and license number, type, and state? Once we have that we'll take another look.`)) +
+            emailP(`We're still working through your application and have one thing we need to clarify before we can move it forward. Our notes are below.`) +
+            emailDivider() +
+            (notes ? emailP(notes) : emailP(`Could you reply with your full legal name as it appears on your license, NPI number, date of birth, and license number, type, and state?`)) +
+            emailDivider() +
             emailP(`Once we hear back we'll pick it right back up.`) +
             emailSignature()
           )
