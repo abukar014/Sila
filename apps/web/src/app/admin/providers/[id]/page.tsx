@@ -134,6 +134,7 @@ export default async function ProviderDetailPage({
             specialties={provider.specialties ?? []}
             npi={provider.npi}
             providerName={provider.name}
+            dob={provider.dob}
           />
         )}
       </div>

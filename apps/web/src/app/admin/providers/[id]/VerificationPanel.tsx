@@ -200,7 +200,7 @@ function getShortGuidance(checkType: string, result: string, details: string, pr
 }
 
 
-function generateNoteSuggestion(checkResults: Partial<Record<string, CheckResult>>): string {
+function generateNoteSuggestion(checkResults: Partial<Record<string, CheckResult>>, dob?: string | null): string {
   const parts: string[] = []
 
   const nppes = checkResults['nppes']
@@ -236,12 +236,13 @@ function generateNoteSuggestion(checkResults: Partial<Record<string, CheckResult
   const leie = checkResults['leie']
   if (leie && leie.result === 'review_required') {
     const d = leie.details.toLowerCase()
+    const hasDob = !!dob
     if (d.includes('partial name')) {
-      parts.push(`We found a partial name match in the OIG exclusion database. This is most likely a different person, but we need to rule it out before moving forward. Could you share your date of birth?`)
+      parts.push(`We found a partial name match in the OIG exclusion database. This is most likely a different person, but we need to rule it out before moving forward.${hasDob ? ` Could you confirm your full legal name as it appears on your license?` : ` Could you share your date of birth so we can confirm this is a different individual?`}`)
     } else if (d.includes('possible match') || d.includes('high confidence')) {
-      parts.push(`We found a possible match in the OIG exclusion database. We need to confirm this isn't you before we can continue. Could you share your date of birth and license number?`)
+      parts.push(`We found a possible match in the OIG exclusion database. We need to confirm this isn't you before we can continue.${hasDob ? `` : ` Could you share your date of birth and license number?`}`)
     } else {
-      parts.push(`We found a name match in the OIG exclusion database that we need to clear before moving forward. Could you confirm your date of birth and the state where you hold your current license?`)
+      parts.push(`We found a name match in the OIG exclusion database that we need to clear before moving forward.${hasDob ? `` : ` Could you confirm your date of birth and the state where you hold your current license?`}`)
     }
   }
 
@@ -287,6 +288,7 @@ export default function VerificationPanel({
   specialties = [],
   npi,
   providerName,
+  dob,
 }: {
   providerId: string
   initialLogs: Log[]
@@ -296,6 +298,7 @@ export default function VerificationPanel({
   specialties?: string[]
   npi?: string
   providerName?: string
+  dob?: string | null
 }) {
   const router = useRouter()
   const [checkResults, setCheckResults] = useState<Partial<Record<string, CheckResult>>>(
@@ -654,7 +657,7 @@ export default function VerificationPanel({
                   onClick={() => {
                     setShowReviewInput(v => {
                       if (!v && !reviewNotes.trim()) {
-                        const suggestion = generateNoteSuggestion(checkResults)
+                        const suggestion = generateNoteSuggestion(checkResults, dob)
                         if (suggestion) setReviewNotes(suggestion)
                       }
                       return !v

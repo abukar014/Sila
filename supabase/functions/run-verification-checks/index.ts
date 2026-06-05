@@ -239,6 +239,12 @@ async function checkLeie(provider: any): Promise<{ result: string; details: stri
 
     if (!nameMatches) {
       if (entryFirstLower.startsWith(firstLower[0]) && result !== 'excluded') {
+        // Before flagging, check if DOB definitively rules this out
+        const partialLeieDob = leieDob !== 'N/A' ? leieDob.replace(/\D/g, '') : null
+        const partialProvDob = provider.dob ? provider.dob.replace(/\D/g, '') : null
+        if (partialLeieDob && partialProvDob && partialLeieDob !== partialProvDob) {
+          continue // DOBs on file and clearly differ — definitively a different person
+        }
         result       = 'review_required'
         matchDetails = `Partial name match — same last name and first initial only | ${baseDetails}`
       }
