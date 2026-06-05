@@ -225,10 +225,14 @@ async function checkLeie(provider: any): Promise<{ result: string; details: stri
 
     const baseDetails = `${entry.FIRSTNAME} ${entry.LASTNAME} | Exclusion: ${entry.EXCLTYPE} | Date: ${entry.EXCLDATE} | DOB: ${leieDob} | Specialty: ${leieSpecialty || 'N/A'} | Address: ${leieCity}, ${leieState}`
 
-    if (npi && entryNpi && entryNpi === npi) {
-      result       = 'excluded'
-      matchDetails = `NPI match (definitive): ${baseDetails}`
-      break
+    if (npi && entryNpi) {
+      if (entryNpi === npi) {
+        result       = 'excluded'
+        matchDetails = `NPI match (definitive): ${baseDetails}`
+        break
+      } else {
+        continue // LEIE record has a different NPI — definitively a different person
+      }
     }
 
     if (entryLast !== lastName.toLowerCase()) continue
