@@ -119,11 +119,15 @@ export async function POST(
 
     const baseDetails = `${entry.FIRSTNAME} ${entry.LASTNAME} | Exclusion: ${entry.EXCLTYPE} | Date: ${entry.EXCLDATE} | DOB: ${leieDob} | Specialty: ${leieSpecialty || 'N/A'} | Address: ${leieCity}, ${leieState}`
 
-    // NPI match — definitive
-    if (npi && entryNpi && entryNpi === npi) {
-      result = 'excluded'
-      matchDetails = `NPI match (definitive): ${baseDetails}`
-      break
+    // NPI match/mismatch — when both sides have an NPI it is definitive either way
+    if (npi && entryNpi) {
+      if (entryNpi === npi) {
+        result = 'excluded'
+        matchDetails = `NPI match (definitive): ${baseDetails}`
+        break
+      } else {
+        continue // Different NPI — definitively a different person
+      }
     }
 
     if (entryLast !== lastName.toLowerCase()) continue
@@ -135,6 +139,21 @@ export async function POST(
     if (!nameMatches) {
       // Partial: same last name, same first initial only
       if (entryFirstLower.startsWith(firstLower[0]) && result !== 'excluded') {
+        // DOB mismatch → definitively a different person
+        const partialLeieDob = leieDob !== 'N/A' ? leieDob.replace(/\D/g, '') : null
+        const partialProvDob = provider.dob ? provider.dob.replace(/\D/g, '') : null
+        if (partialLeieDob && partialProvDob && partialLeieDob !== partialProvDob) {
+          continue
+        }
+
+        // A same-last-name + same-first-initial match is extremely weak on its own.
+        // Only flag if at least one other field (state or specialty) aligns.
+        const stateAligns = providerStateAbbr && leieState && leieState === providerStateAbbr
+        const specAligns  = leieSpecialty && specialtyMatches(provider.license_type, provider.specialties, leieSpecialty)
+        if (!stateAligns && !specAligns) {
+          continue
+        }
+
         result = 'review_required'
         matchDetails = `Partial name match — same last name and first initial only | ${baseDetails}`
       }
