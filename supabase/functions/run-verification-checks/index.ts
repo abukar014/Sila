@@ -243,12 +243,22 @@ async function checkLeie(provider: any): Promise<{ result: string; details: stri
 
     if (!nameMatches) {
       if (entryFirstLower.startsWith(firstLower[0]) && result !== 'excluded') {
-        // Before flagging, check if DOB definitively rules this out
+        // DOB mismatch → definitively a different person
         const partialLeieDob = leieDob !== 'N/A' ? leieDob.replace(/\D/g, '') : null
         const partialProvDob = provider.dob ? provider.dob.replace(/\D/g, '') : null
         if (partialLeieDob && partialProvDob && partialLeieDob !== partialProvDob) {
-          continue // DOBs on file and clearly differ — definitively a different person
+          continue
         }
+
+        // A same-last-name + same-first-initial match is extremely weak on its own.
+        // Only flag it if at least one other field (state or specialty) aligns —
+        // otherwise it is noise, not a lead.
+        const stateAligns = providerStateAbbr && leieState && leieState === providerStateAbbr
+        const specAligns  = leieSpecialty && specialtyMatches(provider.license_type, provider.specialties, leieSpecialty)
+        if (!stateAligns && !specAligns) {
+          continue
+        }
+
         result       = 'review_required'
         matchDetails = `Partial name match — same last name and first initial only | ${baseDetails}`
       }
