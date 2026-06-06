@@ -5,15 +5,33 @@ import { emailTemplate, emailHeading, emailP, emailDivider, emailSignature } fro
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+async function requireOwner(request: NextRequest, id: string) {
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.slice(7)
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+  if (error || !user) return null
+  const { data } = await supabaseAdmin
+    .from('providers')
+    .select('user_id')
+    .eq('id', id)
+    .single()
+  if (!data || data.user_id !== user.id) return null
+  return user
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
 
+  const user = await requireOwner(request, id)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { data: provider, error } = await supabaseAdmin
     .from('providers')
-    .select('id, name, verification_status, status, verified_date, accepting_clients, scheduling_url, email, credentials, state, specialties, approaches, identity, visit_type, faith_approach, languages, bio, insurances, fee_individual, fee_couples, fee_initial, gender, photo_url')
+    .select('id, name, verification_status, status, verified_date, accepting_clients, scheduling_url, email, credentials, state, specialties, approaches, identity, visit_type, faith_approach, languages, bio, insurances, fee_individual, fee_couples, fee_initial, sliding_scale, gender, photo_url')
     .eq('id', id)
     .single()
 
@@ -29,6 +47,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+
+  const user = await requireOwner(request, id)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const updates = await request.json()
 
   if (updates.npi) {
