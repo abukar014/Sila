@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error || !updated) {
-      return NextResponse.json({ error: error?.message ?? 'Failed to update provider record' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to update provider record' }, { status: 500 })
     }
     return NextResponse.json({ provider_id: updated.id })
   }
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error || !provider) {
-    return NextResponse.json({ error: error?.message ?? 'Failed to create provider record' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to create provider record' }, { status: 500 })
   }
 
   return NextResponse.json({ provider_id: provider.id })

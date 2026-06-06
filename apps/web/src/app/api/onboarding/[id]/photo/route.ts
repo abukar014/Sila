@@ -43,7 +43,7 @@ export async function POST(
     .upload(path, arrayBuffer, { contentType: file.type, upsert: true })
 
   if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 })
+    return NextResponse.json({ error: 'Photo upload failed' }, { status: 500 })
   }
 
   const { data: { publicUrl } } = supabaseAdmin.storage
@@ -54,6 +54,16 @@ export async function POST(
     .from('providers')
     .update({ photo_url: publicUrl })
     .eq('id', id)
+
+  try {
+    await supabaseAdmin.from('verification_logs').insert({
+      provider_id: id,
+      check_type: 'photo_upload',
+      result: 'uploaded',
+      raw_output: `Photo uploaded by provider (user: ${user.id})`,
+      run_by: 'provider',
+    })
+  } catch { /* non-critical */ }
 
   return NextResponse.json({ url: publicUrl })
 }

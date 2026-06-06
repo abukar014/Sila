@@ -73,7 +73,7 @@ export async function PATCH(
     .update(updates)
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'Failed to update provider' }, { status: 500 })
 
   if (updates.verification_status === 'pending') {
     const { data: provider } = await supabaseAdmin
