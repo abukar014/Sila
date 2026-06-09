@@ -658,6 +658,8 @@ export default function ProvidersScreen() {
         p_query:         search.trim() || null,
         p_filters:       Object.keys(filtersToLog).length ? filtersToLog : null,
         p_results_count: filtered.length,
+      }).then(({ error }) => {
+        if (error) console.error('[Sila] log_search_event failed:', error)
       })
     }, 1000)
   }, [search, filters, filtered.length])

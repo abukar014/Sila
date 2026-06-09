@@ -77,6 +77,8 @@ export default function ProviderProfileScreen() {
           supabase.rpc('increment_provider_stat', {
             p_provider_id: data.id,
             p_stat_type: 'profile_view',
+          }).then(({ error }) => {
+            if (error) console.error('[Sila] profile_view failed:', error)
           })
         }
         AsyncStorage.getItem('sila_provider_id').then(async id => {
