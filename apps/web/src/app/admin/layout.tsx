@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import AdminNav from './AdminNav'
+import ClientMain from './ClientMain'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { count: pendingCount } = await supabaseAdmin
@@ -35,17 +36,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
       <AdminNav pendingCount={pendingCount ?? 0} />
 
-      <main style={{
-        position: 'relative',
-        zIndex: 1,
-        marginLeft: 216,
-        minHeight: '100vh',
-        padding: '40px 48px',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          {children}
-        </div>
-      </main>
+      <ClientMain>{children}</ClientMain>
     </div>
   )
 }

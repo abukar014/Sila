@@ -72,14 +72,14 @@ export default function AdminNav({ pendingCount }: { pendingCount: number }) {
       position: 'fixed',
       top: 0, left: 0, bottom: 0,
       width: 216,
-      background: 'rgba(3,13,12,0.94)',
-      backdropFilter: 'blur(28px)',
-      WebkitBackdropFilter: 'blur(28px)',
-      borderRight: '1px solid rgba(26,92,90,0.18)',
+      background: 'rgba(7,31,30,0.45)',
+      backdropFilter: 'blur(32px)',
+      WebkitBackdropFilter: 'blur(32px)',
+      borderRight: '1px solid rgba(26,92,90,0.2)',
       display: 'flex',
       flexDirection: 'column',
       zIndex: 50,
-      boxShadow: '4px 0 40px rgba(0,0,0,0.3)',
+      boxShadow: '1px 0 0 rgba(251,247,239,0.03), 4px 0 24px rgba(0,0,0,0.12)',
     }}>
 
       {/* Top accent gradient line */}
