@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import Link from 'next/link'
-import VerifiedTable from '../verified/VerifiedTable'
+import VerifiedActions from './VerifiedActions'
 
 export const revalidate = 0
 
@@ -241,7 +241,36 @@ export default async function VerificationPage({ searchParams }: { searchParams:
       )}
 
       {active === 'verified' && (
-        <VerifiedTable providers={verifiedRows} />
+        <TableShell
+          headers={['Name', 'State', 'Faith approach', 'Accepting', 'Verified', 'Actions']}
+          empty={verifiedRows.length === 0}
+          emptyText="No verified providers yet."
+        >
+          {verifiedRows.map((p, i) => (
+            <tr key={p.id} style={{ borderBottom: i < verifiedRows.length - 1 ? '1px solid rgba(26,92,90,0.1)' : 'none' }}>
+              <td style={tdStyle}>
+                <span style={{ color: '#FBF7EF', fontWeight: 500 }}>{p.name}</span>
+                {p.credentials && <span style={{ display: 'block', fontSize: 11, color: 'rgba(251,247,239,0.28)', marginTop: 1 }}>{p.credentials}</span>}
+              </td>
+              <td style={tdMuted}>{p.state ?? '—'}</td>
+              <td style={tdMuted}>{p.faith_approach?.replace(/_/g, ' ') ?? '—'}</td>
+              <td style={tdStyle}>
+                <span style={{
+                  display: 'inline-block', padding: '2px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+                  background: p.accepting_clients ? 'rgba(91,184,182,0.12)' : 'rgba(251,247,239,0.06)',
+                  color:      p.accepting_clients ? '#5BB8B6'                : 'rgba(251,247,239,0.3)',
+                  border: `1px solid ${p.accepting_clients ? 'rgba(91,184,182,0.25)' : 'rgba(251,247,239,0.1)'}`,
+                }}>
+                  {p.accepting_clients ? 'Yes' : 'No'}
+                </span>
+              </td>
+              <td style={tdMuted}>{p.verified_date ? fmtDate(p.verified_date) : '—'}</td>
+              <td style={tdStyle}>
+                <VerifiedActions id={p.id} name={p.name} />
+              </td>
+            </tr>
+          ))}
+        </TableShell>
       )}
 
       {active === 'excluded' && (
