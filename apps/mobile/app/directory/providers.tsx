@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import {
   View, Text, StyleSheet, TextInput, Pressable,
-  ActivityIndicator, Animated, Modal, Image, ScrollView,
+  ActivityIndicator, Animated, Modal, Image, ScrollView, Switch,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -13,8 +13,89 @@ import { ProviderCard } from '../../components/ProviderCard'
 import { Provider, toArr, modalityLabel, initials, avatarColor } from '../../lib/types'
 import { colors, space, radius, shadow, glassBorder, glassHighlight, GLASS_BG, GLASS_BLUR } from '../../lib/tokens'
 
-type FilterState = { format: string; faith: string; accepting: string; type: string; specialty: string[]; gender: string }
-const DEFAULT_FILTERS: FilterState = { format: 'all', faith: 'all', accepting: 'all', type: 'all', specialty: [], gender: 'all' }
+// ── Zip → state helpers ─────────────────────────────────────────────────────
+const ZIP_RANGES: [number, number, string][] = [
+  [600,988,'PR'],[5001,5907,'VT'],[6001,6928,'CT'],[7001,8989,'NJ'],
+  [10001,14975,'NY'],[15001,19640,'PA'],[19701,19980,'DE'],
+  [20001,20599,'DC'],[20601,21930,'MD'],[22001,24658,'VA'],
+  [24701,26886,'WV'],[27006,28909,'NC'],[29001,29948,'SC'],
+  [30001,31999,'GA'],[32004,34997,'FL'],[35004,36925,'AL'],
+  [37010,38589,'TN'],[38601,39776,'MS'],[39800,39999,'GA'],
+  [40003,42788,'KY'],[43001,45999,'OH'],[46001,47997,'IN'],
+  [48001,49971,'MI'],[50001,52809,'IA'],[53001,54990,'WI'],
+  [55001,56763,'MN'],[57001,57799,'SD'],[58001,58856,'ND'],
+  [59001,59937,'MT'],[60001,62999,'IL'],[63001,65899,'MO'],
+  [66002,67954,'KS'],[68001,69367,'NE'],[70001,71497,'LA'],
+  [71601,72959,'AR'],[73001,74966,'OK'],[75001,79999,'TX'],
+  [80001,81658,'CO'],[82001,83128,'WY'],[83201,83876,'ID'],
+  [84001,84784,'UT'],[85001,86556,'AZ'],[87001,88441,'NM'],
+  [88500,88599,'TX'],[88901,89883,'NV'],[90001,96162,'CA'],
+  [96701,96898,'HI'],[97001,97920,'OR'],[98001,99403,'WA'],[99500,99999,'AK'],
+]
+function zipToState(zip: string): string | null {
+  const n = parseInt(zip, 10)
+  for (const [lo, hi, abbr] of ZIP_RANGES) {
+    if (n >= lo && n <= hi) return abbr
+  }
+  return null
+}
+const STATE_ABBR: Record<string, string> = {
+  Alabama:'AL',Alaska:'AK',Arizona:'AZ',Arkansas:'AR',California:'CA',
+  Colorado:'CO',Connecticut:'CT',Delaware:'DE',Florida:'FL',Georgia:'GA',
+  Hawaii:'HI',Idaho:'ID',Illinois:'IL',Indiana:'IN',Iowa:'IA',
+  Kansas:'KS',Kentucky:'KY',Louisiana:'LA',Maine:'ME',Maryland:'MD',
+  Massachusetts:'MA',Michigan:'MI',Minnesota:'MN',Mississippi:'MS',Missouri:'MO',
+  Montana:'MT',Nebraska:'NE',Nevada:'NV','New Hampshire':'NH','New Jersey':'NJ',
+  'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND',Ohio:'OH',
+  Oklahoma:'OK',Oregon:'OR',Pennsylvania:'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD',Tennessee:'TN',Texas:'TX',Utah:'UT',Vermont:'VT',
+  Virginia:'VA',Washington:'WA','West Virginia':'WV',Wisconsin:'WI',Wyoming:'WY',
+  'District of Columbia':'DC','Puerto Rico':'PR',
+}
+function stateToAbbr(name: string): string {
+  if (!name) return ''
+  const t = name.trim()
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase()
+  return STATE_ABBR[t] ?? t.slice(0, 2).toUpperCase()
+}
+function parseFeeMin(str: string | null | undefined): number | null {
+  if (!str) return null
+  const m = String(str).match(/\d+/)
+  return m ? parseInt(m[0], 10) : null
+}
+
+// ── Filter types & constants ─────────────────────────────────────────────────
+type FilterState = {
+  format: string; faith: string; accepting: string; type: string
+  specialty: string[]; gender: string; language: string[]; fee: string; slidingScale: boolean
+  ageGroup: string[]; approach: string[]
+}
+const DEFAULT_FILTERS: FilterState = {
+  format: 'all', faith: 'all', accepting: 'all', type: 'all',
+  specialty: [], gender: 'all', language: [], fee: 'any', slidingScale: false,
+  ageGroup: [], approach: [],
+}
+
+const AGE_GROUP_OPTIONS = [
+  { label: 'Children (6–12)',    value: 'children' },
+  { label: 'Teens (13–17)',      value: 'teens' },
+  { label: 'Young Adults (18–24)', value: 'young_adults' },
+  { label: 'Adults (25–64)',     value: 'adults' },
+  { label: 'Seniors (65+)',      value: 'seniors' },
+]
+
+const APPROACH_FILTER_OPTIONS = [
+  { label: 'CBT',              value: 'CBT' },
+  { label: 'DBT',              value: 'DBT' },
+  { label: 'EMDR',             value: 'EMDR' },
+  { label: 'ACT',              value: 'ACT' },
+  { label: 'Psychodynamic',    value: 'Psychodynamic' },
+  { label: 'Mindfulness',      value: 'Mindfulness' },
+  { label: 'Solution-focused', value: 'Solution-focused' },
+  { label: 'Somatic',          value: 'Somatic therapy' },
+  { label: 'IFS',              value: 'IFS' },
+  { label: 'Gottman',          value: 'Gottman method' },
+]
 
 const SPECIALTY_FILTER_OPTIONS = [
   { label: 'Anxiety', value: 'Anxiety' },
@@ -58,18 +139,29 @@ const GENDER_OPTIONS = [
   { label: 'Female', value: 'female' },
   { label: 'Male', value: 'male' },
 ]
+const FEE_OPTIONS = [
+  { label: 'Any', value: 'any' },
+  { label: 'Under $100', value: 'under100' },
+  { label: '$100–$150', value: '100-150' },
+  { label: '$150–$200', value: '150-200' },
+  { label: '$200+', value: '200plus' },
+]
 
+// ── Filter sheet ─────────────────────────────────────────────────────────────
 function FilterSheet({
-  filters, onChange, onClear, onClose, activeFilterCount,
+  filters, onChange, onClear, onClose, activeFilterCount, availableLanguages,
 }: {
   filters: FilterState
-  onChange: (key: keyof FilterState, val: string | string[]) => void
+  onChange: (key: keyof FilterState, val: string | string[] | boolean) => void
   onClear: () => void
   onClose: () => void
   activeFilterCount: number
+  availableLanguages: string[]
 }) {
   const insets = useSafeAreaInsets()
   const fadeAnim = useRef(new Animated.Value(0)).current
+  const [approachExpanded, setApproachExpanded] = useState(() => filters.approach.length > 0)
+  const [focusExpanded, setFocusExpanded]       = useState(() => filters.specialty.length > 0)
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start()
@@ -131,7 +223,6 @@ function FilterSheet({
         <LinearGradient colors={['#FBF7EF', '#F5EFE6', '#EEE5D3']} style={StyleSheet.absoluteFill} />
         <SafeAreaView style={{ flex: 1 }}>
 
-          {/* Header */}
           <View style={[fStyles.header, { paddingTop: insets.top + 8 }]}>
             <Pressable onPress={dismiss} hitSlop={12} style={fStyles.closeBtn}>
               <Text style={fStyles.closeBtnText}>✕</Text>
@@ -142,21 +233,100 @@ function FilterSheet({
             </Pressable>
           </View>
 
-          {/* Sections */}
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={fStyles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Section label="Category" options={TYPE_OPTIONS} activeValue={filters.type} filterKey="type" />
-            <Section label="Format" options={FORMAT_OPTIONS} activeValue={filters.format} filterKey="format" />
-            <Section label="Availability" options={ACCEPTING_OPTIONS} activeValue={filters.accepting} filterKey="accepting" />
-            <Section label="Provider gender" options={GENDER_OPTIONS} activeValue={filters.gender} filterKey="gender" />
             <Section label="Faith approach" options={FAITH_OPTIONS} activeValue={filters.faith} filterKey="faith" />
-            <Section label="Focus area" options={SPECIALTY_FILTER_OPTIONS} activeValue={filters.specialty} filterKey="specialty" multiSelect hint="Select all that apply" />
+            {availableLanguages.length > 0 && (
+              <Section
+                label="Language"
+                options={availableLanguages.map(l => ({ label: l, value: l }))}
+                activeValue={filters.language}
+                filterKey="language"
+                multiSelect
+                hint="Select all that apply"
+              />
+            )}
+            <Section label="Format" options={FORMAT_OPTIONS} activeValue={filters.format} filterKey="format" />
+            <Section label="Provider gender" options={GENDER_OPTIONS} activeValue={filters.gender} filterKey="gender" />
+            <Section label="Age group" options={AGE_GROUP_OPTIONS} activeValue={filters.ageGroup} filterKey="ageGroup" multiSelect hint="Select all that apply" />
+            <View style={fStyles.section}>
+              <Pressable onPress={() => setApproachExpanded(e => !e)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }} hitSlop={8}>
+                <Text style={fStyles.sectionLabel}>Therapeutic approach</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {!approachExpanded && filters.approach.length > 0 && (
+                    <View style={fStyles.collapseBadge}><Text style={fStyles.collapseBadgeText}>{filters.approach.length}</Text></View>
+                  )}
+                  <Text style={[fStyles.collapseChevron, approachExpanded && { transform: [{ rotate: '180deg' }] }]}>›</Text>
+                </View>
+              </Pressable>
+              {approachExpanded && (
+                <View style={fStyles.sectionCard}>
+                  <View style={glassHighlight} />
+                  <View style={fStyles.chipRow}>
+                    {APPROACH_FILTER_OPTIONS.map(opt => {
+                      const active = filters.approach.includes(opt.value)
+                      return (
+                        <Pressable key={opt.value} onPress={() => onChange('approach', filters.approach.includes(opt.value) ? filters.approach.filter(v => v !== opt.value) : [...filters.approach, opt.value])} style={[fStyles.chip, active && fStyles.chipActive]}>
+                          <Text style={[fStyles.chipText, active && fStyles.chipTextActive]}>{opt.label}</Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                </View>
+              )}
+            </View>
+            <Section label="Fees" options={FEE_OPTIONS} activeValue={filters.fee} filterKey="fee" />
+            <View style={fStyles.section}>
+              <View style={fStyles.sectionCard}>
+                <View style={glassHighlight} />
+                <View style={fStyles.toggleRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={fStyles.toggleLabel}>Sliding scale only</Text>
+                    <Text style={fStyles.toggleSub}>Providers who adjust fees by income</Text>
+                  </View>
+                  <Switch
+                    value={filters.slidingScale}
+                    onValueChange={v => onChange('slidingScale', v)}
+                    trackColor={{ false: 'rgba(31,27,22,0.14)', true: colors.teal }}
+                    thumbColor={colors.paper}
+                    ios_backgroundColor="rgba(31,27,22,0.14)"
+                  />
+                </View>
+              </View>
+            </View>
+            <Section label="Availability" options={ACCEPTING_OPTIONS} activeValue={filters.accepting} filterKey="accepting" />
+            <Section label="Category" options={TYPE_OPTIONS} activeValue={filters.type} filterKey="type" />
+            <View style={fStyles.section}>
+              <Pressable onPress={() => setFocusExpanded(e => !e)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }} hitSlop={8}>
+                <Text style={fStyles.sectionLabel}>Focus area</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {!focusExpanded && filters.specialty.length > 0 && (
+                    <View style={fStyles.collapseBadge}><Text style={fStyles.collapseBadgeText}>{filters.specialty.length}</Text></View>
+                  )}
+                  <Text style={[fStyles.collapseChevron, focusExpanded && { transform: [{ rotate: '180deg' }] }]}>›</Text>
+                </View>
+              </Pressable>
+              {focusExpanded && (
+                <View style={fStyles.sectionCard}>
+                  <View style={glassHighlight} />
+                  <View style={fStyles.chipRow}>
+                    {SPECIALTY_FILTER_OPTIONS.map(opt => {
+                      const active = filters.specialty.includes(opt.value)
+                      return (
+                        <Pressable key={opt.value} onPress={() => onChange('specialty', filters.specialty.includes(opt.value) ? filters.specialty.filter(v => v !== opt.value) : [...filters.specialty, opt.value])} style={[fStyles.chip, active && fStyles.chipActive]}>
+                          <Text style={[fStyles.chipText, active && fStyles.chipTextActive]}>{opt.label}</Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                </View>
+              )}
+            </View>
           </ScrollView>
 
-          {/* CTA */}
           <View style={fStyles.ctaArea}>
             <Pressable onPress={dismiss} style={({ pressed }) => [fStyles.applyBtn, pressed && { opacity: 0.85 }]}>
               <Text style={fStyles.applyBtnText}>
@@ -213,6 +383,10 @@ const fStyles = StyleSheet.create({
   chipText: { fontFamily: 'DMSans_500Medium', fontSize: 13, color: colors.ink54 },
   chipTextActive: { fontFamily: 'DMSans_600SemiBold', color: colors.paper },
 
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  toggleLabel: { fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: colors.ink, lineHeight: 20, marginBottom: 2 },
+  toggleSub: { fontFamily: 'DMSans_400Regular', fontSize: 11, color: colors.ink54, lineHeight: 16 },
+
   ctaArea: { paddingHorizontal: 24, paddingBottom: 24, paddingTop: 8 },
   applyBtn: {
     height: 54, borderRadius: 14, backgroundColor: colors.tealDeep,
@@ -222,6 +396,13 @@ const fStyles = StyleSheet.create({
     shadowOpacity: 0.16, shadowRadius: 18, elevation: 6,
   },
   applyBtnText: { fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: colors.paper },
+
+  collapseChevron: { fontFamily: 'DMSans_500Medium', fontSize: 18, color: colors.clay, lineHeight: 22 },
+  collapseBadge: {
+    backgroundColor: colors.clay, borderRadius: 999,
+    paddingHorizontal: 7, paddingVertical: 2, minWidth: 20, alignItems: 'center',
+  },
+  collapseBadgeText: { fontFamily: 'DMSans_700Bold', fontSize: 11, color: colors.paper },
 })
 
 // Map category-screen type param → filter value
@@ -291,22 +472,18 @@ function ProviderSheet({ provider: p, onClose }: { provider: Provider; onClose: 
 
   return (
     <Modal transparent animationType="none" onRequestClose={dismiss}>
-      {/* Blurred backdrop */}
       <Animated.View style={[styles.sheetOverlay, { opacity: backdropAnim }]}>
         <BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} />
         <Pressable style={StyleSheet.absoluteFillObject} onPress={dismiss} />
       </Animated.View>
 
-      {/* Sheet */}
       <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
         <BlurView intensity={GLASS_BLUR} tint="light" style={StyleSheet.absoluteFill} />
         <View style={glassHighlight} />
         <View style={styles.sheetInner}>
 
-          {/* Handle */}
           <View style={styles.sheetHandle} />
 
-          {/* Provider header */}
           <View style={styles.sheetHeader}>
             <View style={[styles.sheetAvatar, { backgroundColor: color }]}>
               {p.photo_url
@@ -321,7 +498,6 @@ function ProviderSheet({ provider: p, onClose }: { provider: Provider; onClose: 
             </View>
           </View>
 
-          {/* Pull quote / bio excerpt */}
           {(p.pull_quote || p.bio) && (
             <View style={styles.sheetBio}>
               <BlurView intensity={GLASS_BLUR} tint="light" style={StyleSheet.absoluteFill} />
@@ -330,7 +506,6 @@ function ProviderSheet({ provider: p, onClose }: { provider: Provider; onClose: 
             </View>
           )}
 
-          {/* Quick details */}
           <View style={styles.sheetDetails}>
             <View style={styles.sheetDetailRow}>
               <Text style={styles.sheetDetailLabel}>Languages</Text>
@@ -343,7 +518,6 @@ function ProviderSheet({ provider: p, onClose }: { provider: Provider; onClose: 
             </View>
           </View>
 
-          {/* CTAs */}
           <Pressable
             style={({ pressed }) => [styles.sheetBtnPrimary, pressed && { opacity: 0.88 }]}
             onPress={() => { dismiss(); setTimeout(() => router.push(`/provider/${p.slug}`), 260) }}
@@ -378,10 +552,23 @@ export default function ProvidersScreen() {
   const [showFilters, setShowFilters] = useState(false)
   const scrollY = useRef(new Animated.Value(0)).current
 
+  // Convert zip param to state abbreviation once
+  const zipStateAbbr = useMemo(() => {
+    if (!zip) return null
+    return zipToState(zip)
+  }, [zip])
+
+  // Derive available languages from loaded providers
+  const availableLanguages = useMemo(() => {
+    const langs = new Set<string>()
+    providers.forEach(p => toArr(p.languages).forEach(l => { if (l) langs.add(l.trim()) }))
+    return [...langs].sort()
+  }, [providers])
+
   useEffect(() => {
     supabase
       .from('providers')
-      .select('id, slug, name, license_type, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, pull_quote, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, visit_type, telehealth, in_person, photo_url, accepting_clients, verified_date, gender')
+      .select('id, slug, name, license_type, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, pull_quote, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, visit_type, telehealth, in_person, photo_url, accepting_clients, verified_date, gender, sliding_scale, age_groups')
       .eq('verification_status', 'verified')
       .eq('status', 'active')
       .order('name', { ascending: true })
@@ -394,9 +581,19 @@ export default function ProvidersScreen() {
     (filters.accepting !== 'all' ? 1 : 0) +
     (filters.type !== 'all' ? 1 : 0) +
     (filters.gender !== 'all' ? 1 : 0) +
-    filters.specialty.length
+    filters.specialty.length +
+    filters.language.length +
+    filters.ageGroup.length +
+    filters.approach.length +
+    (filters.fee !== 'any' ? 1 : 0) +
+    (filters.slidingScale ? 1 : 0)
 
   const filtered = providers.filter(p => {
+    // State filter from zip
+    if (zipStateAbbr) {
+      const pAbbr = stateToAbbr(p.state ?? '')
+      if (pAbbr !== zipStateAbbr) return false
+    }
     if (!matchesChip(p, filters.type)) return false
     if (filters.format === 'telehealth' && !p.telehealth) return false
     if (filters.format === 'in_person' && !p.in_person) return false
@@ -405,6 +602,27 @@ export default function ProvidersScreen() {
     if (filters.gender !== 'all' && p.gender !== filters.gender) return false
     if (filters.faith !== 'all' && p.faith_approach !== filters.faith) return false
     if (filters.specialty.length > 0 && !toArr(p.specialties).some(s => filters.specialty.some(f => s.toLowerCase() === f.toLowerCase()))) return false
+    if (filters.language.length > 0) {
+      const pLangs = toArr(p.languages).map(l => l.toLowerCase())
+      if (!filters.language.some(l => pLangs.includes(l.toLowerCase()))) return false
+    }
+    if (filters.fee !== 'any') {
+      const feeMin = parseFeeMin(p.fee_individual)
+      if (feeMin === null) return false
+      if (filters.fee === 'under100'  && feeMin >= 100) return false
+      if (filters.fee === '100-150'   && (feeMin < 100 || feeMin > 150)) return false
+      if (filters.fee === '150-200'   && (feeMin <= 150 || feeMin > 200)) return false
+      if (filters.fee === '200plus'   && feeMin <= 200) return false
+    }
+    if (filters.slidingScale && !p.sliding_scale) return false
+    if (filters.approach.length > 0) {
+      const pApproaches = toArr(p.approaches).map(a => a.toLowerCase())
+      if (!filters.approach.some(a => pApproaches.some(pa => pa.includes(a.toLowerCase())))) return false
+    }
+    if (filters.ageGroup.length > 0) {
+      const pAgeGroups = toArr(p.age_groups).map(a => a.toLowerCase())
+      if (!filters.ageGroup.some(a => pAgeGroups.includes(a.toLowerCase()))) return false
+    }
     const q = search.trim().toLowerCase()
     if (!q) return true
     return (
@@ -414,6 +632,35 @@ export default function ProvidersScreen() {
       (p.state ?? '').toLowerCase().includes(q)
     )
   })
+
+  const searchLogTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (searchLogTimer.current) clearTimeout(searchLogTimer.current)
+    searchLogTimer.current = setTimeout(() => {
+      const hasQuery = !!search.trim()
+      const hasFilters = activeFilterCount > 0
+      if (!hasQuery && !hasFilters) return
+
+      const filtersToLog: Record<string, unknown> = {}
+      if (filters.type !== 'all')      filtersToLog.category     = filters.type
+      if (filters.faith !== 'all')     filtersToLog.faith        = filters.faith
+      if (filters.format !== 'all')    filtersToLog.modality     = filters.format
+      if (filters.accepting !== 'all') filtersToLog.accepting    = filters.accepting
+      if (filters.gender !== 'all')    filtersToLog.gender       = filters.gender
+      if (filters.fee !== 'any')       filtersToLog.fee_bracket  = filters.fee
+      if (filters.slidingScale)        filtersToLog.sliding_scale = true
+      if (filters.specialty.length)    filtersToLog.specialties  = filters.specialty
+      if (filters.language.length)     filtersToLog.languages    = filters.language
+      if (filters.ageGroup.length)     filtersToLog.age_groups   = filters.ageGroup
+      if (filters.approach.length)     filtersToLog.approaches   = filters.approach
+
+      supabase.rpc('log_search_event', {
+        p_query:         search.trim() || null,
+        p_filters:       Object.keys(filtersToLog).length ? filtersToLog : null,
+        p_results_count: filtered.length,
+      })
+    }, 1000)
+  }, [search, filters, filtered.length])
 
   return (
     <View style={styles.root}>
@@ -426,7 +673,6 @@ export default function ProvidersScreen() {
 
       <SafeAreaView style={styles.safe} edges={['top']}>
 
-        {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
             <Text style={styles.backText}>← Back</Text>
@@ -435,10 +681,13 @@ export default function ProvidersScreen() {
             Find someone who{' '}
             <Text style={styles.headlineAccent}>gets it.</Text>
           </Text>
-          {zip ? <Text style={styles.zipNote}>Near {zip}</Text> : null}
+          {zip ? (
+            <Text style={styles.zipNote}>
+              {zipStateAbbr ? `Providers in ${zipStateAbbr}` : `Near ${zip}`}
+            </Text>
+          ) : null}
         </View>
 
-        {/* Search bar */}
         <View style={styles.searchWrap}>
           <BlurView intensity={GLASS_BLUR} tint="light" style={StyleSheet.absoluteFill} />
           <View style={styles.searchInner}>
@@ -459,7 +708,6 @@ export default function ProvidersScreen() {
           </View>
         </View>
 
-        {/* Quick filter chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -489,7 +737,6 @@ export default function ProvidersScreen() {
           })}
         </ScrollView>
 
-        {/* Results count + filter button */}
         <View style={styles.resultsBar}>
           <View style={styles.liveRow}>
             <View style={styles.liveDot} />
@@ -510,7 +757,6 @@ export default function ProvidersScreen() {
           </Pressable>
         </View>
 
-        {/* List */}
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={colors.teal} size="large" />
@@ -544,6 +790,7 @@ export default function ProvidersScreen() {
           onClear={() => setFilters(DEFAULT_FILTERS)}
           onClose={() => setShowFilters(false)}
           activeFilterCount={activeFilterCount}
+          availableLanguages={availableLanguages}
         />
       )}
     </View>

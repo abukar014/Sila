@@ -49,6 +49,9 @@ function Chip({ label, warm }: { label: string; warm?: boolean }) {
   )
 }
 
+// In-memory session dedup — cleared when app restarts, same as sessionStorage on web
+const viewedThisSession = new Set<string>()
+
 export default function ProviderProfileScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const [provider, setProvider] = useState<Provider | null>(null)
@@ -69,8 +72,17 @@ export default function ProviderProfileScreen() {
         if (error || !data) { setNotFound(true); setLoading(false); return }
         setProvider(data)
         setLoading(false)
-        AsyncStorage.getItem('sila_provider_id').then(id => {
-          if (id && id === data.id) setIsOwnProfile(true)
+        if (!viewedThisSession.has(data.id)) {
+          viewedThisSession.add(data.id)
+          supabase.rpc('increment_provider_stat', {
+            p_provider_id: data.id,
+            p_stat_type: 'profile_view',
+          })
+        }
+        AsyncStorage.getItem('sila_provider_id').then(async id => {
+          if (!id || id !== data.id) return
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session) setIsOwnProfile(true)
         })
       })
   }, [slug])
@@ -100,6 +112,9 @@ export default function ProviderProfileScreen() {
   const modality = modalityLabel(provider)
   const langs = toArr(provider.languages).join(', ') || 'English'
   const firstName = provider.name.split(' ').find(w => !w.includes('.')) ?? provider.name.split(' ')[0]
+  const verifiedLabel = provider.verified_date
+    ? `✓ Sila Verified · ${new Date(provider.verified_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+    : '✓ Sila Verified'
   const specialties = toArr(provider.specialties)
   const approaches = toArr(provider.approaches)
   const identity = toArr(provider.identity)
@@ -148,7 +163,7 @@ export default function ProviderProfileScreen() {
             <Text style={styles.heroName}>{provider.name}</Text>
             <Text style={styles.heroCreds}>{creds}</Text>
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓ Sila Verified</Text>
+              <Text style={styles.verifiedText}>{verifiedLabel}</Text>
             </View>
           </View>
         </LinearGradient>
@@ -159,6 +174,7 @@ export default function ProviderProfileScreen() {
             <BlurView intensity={GLASS_BLUR} tint="light" style={StyleSheet.absoluteFill} />
             <View style={glassHighlight} />
             <View style={styles.quoteInner}>
+              <Text style={styles.quoteEyebrow}>In their own words</Text>
               <Text style={styles.quoteText}>"{quote}"</Text>
             </View>
           </View>
@@ -196,10 +212,10 @@ export default function ProviderProfileScreen() {
             )}
           </GlassSection>
 
-          {/* About */}
+          {/* Bio */}
           {provider.bio && (
             <View style={styles.group}>
-              <SectionLabel text={`About ${firstName}`} />
+              <SectionLabel text="Bio" />
               <GlassSection>
                 <Text style={styles.bioText}>{provider.bio}</Text>
               </GlassSection>
@@ -305,9 +321,16 @@ export default function ProviderProfileScreen() {
           ) : schedulingUrl ? (
             <Pressable
               style={({ pressed }) => [styles.ctaBtn, pressed && { opacity: 0.88 }]}
-              onPress={() => Linking.openURL(schedulingUrl)}
+              onPress={() => {
+                supabase.rpc('increment_provider_stat', {
+                  p_provider_id: provider.id,
+                  p_stat_type: 'booking_click',
+                })
+                const utmUrl = schedulingUrl + (schedulingUrl.includes('?') ? '&' : '?') + 'utm_source=sila&utm_medium=app'
+                Linking.openURL(utmUrl)
+              }}
             >
-              <Text style={styles.ctaBtnText}>Continue to scheduler →</Text>
+              <Text style={styles.ctaBtnText}>Book a session</Text>
             </Pressable>
           ) : (
             <View style={[styles.ctaBtn, styles.ctaBtnDisabled]}>
@@ -377,6 +400,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     backgroundColor: GLASS_BG,
+  },
+  quoteEyebrow: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.clay,
+    marginBottom: 8,
   },
   quoteText: {
     fontFamily: 'CormorantGaramond_400Regular_Italic',
