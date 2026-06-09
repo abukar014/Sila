@@ -33,7 +33,7 @@ export default async function VerificationPage({ searchParams }: { searchParams:
   // Fetch table data for active tab
   let queueRows:    { id: string; name: string; credentials: string|null; city: string|null; npi: string|null; submitted_at: string }[]         = []
   let inReviewRows: { id: string; name: string; credentials: string|null; city: string|null; npi: string|null; created_at: string; verification_notes: string|null }[] = []
-  let verifiedRows: { id: string; name: string; credentials: string|null; city: string|null; faith_approach: string|null; accepting_clients: boolean; verified_date: string|null }[] = []
+  let verifiedRows: { id: string; name: string; credentials: string|null; state: string|null; faith_approach: string|null; accepting_clients: boolean; verified_date: string|null }[] = []
   let excludedRows: { id: string; name: string; credentials: string|null; city: string|null; npi: string|null; created_at: string; exclusion_reason: string|null }[] = []
 
   if (active === 'queue') {
@@ -54,7 +54,7 @@ export default async function VerificationPage({ searchParams }: { searchParams:
   } else if (active === 'verified') {
     const { data } = await supabaseAdmin
       .from('providers')
-      .select('id, name, credentials, city, faith_approach, accepting_clients, verified_date')
+      .select('id, name, credentials, state, faith_approach, accepting_clients, verified_date')
       .eq('verification_status', 'verified')
       .eq('status', 'active')
       .order('verified_date', { ascending: false })
@@ -241,7 +241,7 @@ export default async function VerificationPage({ searchParams }: { searchParams:
 
       {active === 'verified' && (
         <TableShell
-          headers={['Name', 'City', 'Faith approach', 'Accepting', 'Verified', '']}
+          headers={['Name', 'State', 'Faith approach', 'Accepting', 'Verified', '']}
           empty={verifiedRows.length === 0}
           emptyText="No verified providers yet."
         >
@@ -251,7 +251,7 @@ export default async function VerificationPage({ searchParams }: { searchParams:
                 <span style={{ color: '#FBF7EF', fontWeight: 500 }}>{p.name}</span>
                 {p.credentials && <span style={{ display: 'block', fontSize: 11, color: 'rgba(251,247,239,0.28)', marginTop: 1 }}>{p.credentials}</span>}
               </td>
-              <td style={tdMuted}>{p.city ?? '—'}</td>
+              <td style={tdMuted}>{p.state ?? '—'}</td>
               <td style={tdMuted}>{p.faith_approach?.replace(/_/g, ' ') ?? '—'}</td>
               <td style={tdStyle}>
                 <span style={{

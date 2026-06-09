@@ -8,7 +8,7 @@ type Provider = {
   id: string
   name: string
   credentials: string | null
-  city: string | null
+  state: string | null
   faith_approach: string | null
   accepting_clients: boolean
   verified_date: string | null
@@ -47,6 +47,50 @@ function Toggle({ providerId, initial }: { providerId: string; initial: boolean 
   )
 }
 
+function DeleteButton({ providerId, name }: { providerId: string; name: string }) {
+  const router = useRouter()
+  const [confirm, setConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    await fetch(`/api/admin/providers/${providerId}`, { method: 'DELETE' })
+    router.refresh()
+  }
+
+  if (confirm) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 11, color: 'rgba(248,113,113,0.7)', whiteSpace: 'nowrap' }}>
+          Delete {name.split(' ')[0]}?
+        </span>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer', opacity: deleting ? 0.5 : 1 }}
+        >
+          {deleting ? '...' : 'Yes'}
+        </button>
+        <button
+          onClick={() => setConfirm(false)}
+          style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, background: 'transparent', color: 'rgba(251,247,239,0.3)', border: '1px solid rgba(251,247,239,0.1)', cursor: 'pointer' }}
+        >
+          No
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setConfirm(true)}
+      style={{ padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, background: 'transparent', color: 'rgba(248,113,113,0.45)', border: '1px solid rgba(248,113,113,0.18)', cursor: 'pointer' }}
+    >
+      Delete
+    </button>
+  )
+}
+
 export default function VerifiedTable({ providers }: { providers: Provider[] }) {
   const router = useRouter()
   const [deactivating, setDeactivating] = useState<string | null>(null)
@@ -76,7 +120,7 @@ export default function VerifiedTable({ providers }: { providers: Provider[] }) 
         <thead>
           <tr style={{ backgroundColor: 'rgba(22,11,7,0.75)', borderBottom: '1px solid rgba(160,106,87,0.18)' }}>
             <th className="text-left px-5 py-3 font-medium" style={{ color: 'rgba(251,247,239,0.35)' }}>Name</th>
-            <th className="text-left px-5 py-3 font-medium" style={{ color: 'rgba(251,247,239,0.35)' }}>City</th>
+            <th className="text-left px-5 py-3 font-medium" style={{ color: 'rgba(251,247,239,0.35)' }}>State</th>
             <th className="text-left px-5 py-3 font-medium" style={{ color: 'rgba(251,247,239,0.35)' }}>Faith Approach</th>
             <th className="text-left px-5 py-3 font-medium" style={{ color: 'rgba(251,247,239,0.35)' }}>Accepting</th>
             <th className="text-left px-5 py-3 font-medium" style={{ color: 'rgba(251,247,239,0.35)' }}>Verified</th>
@@ -96,7 +140,7 @@ export default function VerifiedTable({ providers }: { providers: Provider[] }) 
                 <p style={{ color: '#FBF7EF', fontWeight: 500 }}>{p.name}</p>
                 {p.credentials && <p className="text-xs mt-0.5" style={{ color: 'rgba(251,247,239,0.30)' }}>{p.credentials}</p>}
               </td>
-              <td className="px-5 py-4" style={{ color: 'rgba(251,247,239,0.45)' }}>{p.city ?? '—'}</td>
+              <td className="px-5 py-4" style={{ color: 'rgba(251,247,239,0.45)' }}>{p.state ?? '—'}</td>
               <td className="px-5 py-4" style={{ color: 'rgba(251,247,239,0.45)' }}>
                 {p.faith_approach?.replace(/_/g, ' ') ?? '—'}
               </td>
@@ -109,22 +153,23 @@ export default function VerifiedTable({ providers }: { providers: Provider[] }) 
                   : '—'}
               </td>
               <td className="px-5 py-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
                   <Link
                     href={`/admin/providers/${p.id}`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium"
                     style={{ backgroundColor: 'rgba(160,106,87,0.12)', color: 'rgba(251,247,239,0.65)', border: '1px solid rgba(160,106,87,0.22)' }}
                   >
-                    View profile
+                    View
                   </Link>
                   <button
                     onClick={() => deactivate(p.id)}
                     disabled={deactivating === p.id}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                    style={{ backgroundColor: 'rgba(100,20,20,0.5)', color: '#f87171', border: '1px solid rgba(160,40,40,0.4)', opacity: deactivating === p.id ? 0.5 : 1 }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                    style={{ backgroundColor: 'rgba(100,20,20,0.5)', color: '#f87171', border: '1px solid rgba(160,40,40,0.4)', cursor: 'pointer', opacity: deactivating === p.id ? 0.5 : 1 }}
                   >
-                    {deactivating === p.id ? 'Deactivating...' : 'Deactivate'}
+                    {deactivating === p.id ? 'Pausing...' : 'Deactivate'}
                   </button>
+                  <DeleteButton providerId={p.id} name={p.name} />
                 </div>
               </td>
             </tr>

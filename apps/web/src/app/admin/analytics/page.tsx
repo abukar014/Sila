@@ -23,7 +23,6 @@ export default async function AnalyticsPage() {
     { data: searchEvents },
     { data: stateData },
     { count: verifiedCount },
-    { count: noSchedulingCount },
     { count: notAcceptingCount },
   ] = await Promise.all([
     supabaseAdmin.from('provider_stats_named')
@@ -38,9 +37,6 @@ export default async function AnalyticsPage() {
       .eq('verification_status', 'verified').eq('status', 'active'),
     supabaseAdmin.from('providers').select('*', { count: 'exact', head: true })
       .eq('verification_status', 'verified').eq('status', 'active'),
-    supabaseAdmin.from('providers').select('*', { count: 'exact', head: true })
-      .eq('verification_status', 'verified').eq('status', 'active')
-      .or('scheduling_url.is.null,scheduling_url.eq.""'),
     supabaseAdmin.from('providers').select('*', { count: 'exact', head: true })
       .eq('verification_status', 'verified').eq('status', 'active')
       .eq('accepting_clients', false),
@@ -84,8 +80,12 @@ export default async function AnalyticsPage() {
     }, new Map<string, number>())
   const topZeroQueries = Array.from(zeroResultQueries.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
 
-  // Coverage
-  const statesSet = new Set((stateData ?? []).map(p => p.state).filter(Boolean))
+  // Coverage — build per-state counts
+  const stateCounts = new Map<string, number>()
+  for (const p of stateData ?? []) {
+    if (p.state) stateCounts.set(p.state, (stateCounts.get(p.state) ?? 0) + 1)
+  }
+  const stateRows = Array.from(stateCounts.entries()).sort((a, b) => b[1] - a[1])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 36, paddingBottom: 48 }}>
@@ -106,10 +106,53 @@ export default async function AnalyticsPage() {
       {/* ── Directory coverage ── */}
       <div>
         <SectionLabel>Directory coverage</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <StatCard label="Verified providers" value={num(verifiedCount)} context="Active and visible in the public directory" accent="teal" />
-          <StatCard label="States covered"      value={statesSet.size === 0 ? '—' : String(statesSet.size)} context="Distinct US states with ≥1 active provider" accent="neutral" />
-          <StatCard label="Not accepting"       value={num(notAcceptingCount)} context="Visible but closed to new client referrals" accent="neutral" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 }}>
+          <StatCard label="Verified providers" value={num(verifiedCount)}        context="Active and visible in the public directory"   accent="teal" />
+          <StatCard label="States covered"     value={stateRows.length === 0 ? '—' : String(stateRows.length)} context="Distinct US states with ≥1 active provider" accent="neutral" />
+          <StatCard label="Not accepting"      value={num(notAcceptingCount)}    context="Visible but closed to new client referrals"  accent="neutral" />
+        </div>
+        {/* States breakdown */}
+        <div style={{
+          background: 'rgba(26,92,90,0.07)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(26,92,90,0.22)',
+          borderRadius: 13,
+          overflow: 'hidden',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(251,247,239,0.04)',
+        }}>
+          <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(26,92,90,0.16)' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'rgba(251,247,239,0.7)', margin: '0 0 3px' }}>State coverage breakdown</p>
+            <p style={{ fontSize: 11, color: 'rgba(251,247,239,0.27)', margin: 0 }}>Verified, active providers grouped by state — shows where the directory has density and where gaps exist.</p>
+          </div>
+          {stateRows.length === 0 ? (
+            <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'rgba(251,247,239,0.2)' }}>
+              No state data yet
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '16px 20px' }}>
+              {stateRows.map(([state, count]) => (
+                <div key={state} style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '6px 12px',
+                  background: 'rgba(26,92,90,0.12)',
+                  border: '1px solid rgba(26,92,90,0.25)',
+                  borderRadius: 8,
+                }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#FBF7EF', letterSpacing: '0.02em' }}>{state}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: count > 1 ? '#5BB8B6' : 'rgba(251,247,239,0.35)',
+                    background: count > 1 ? 'rgba(91,184,182,0.12)' : 'rgba(251,247,239,0.06)',
+                    borderRadius: 4, padding: '1px 5px',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
