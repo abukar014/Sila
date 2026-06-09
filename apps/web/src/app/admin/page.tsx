@@ -3,38 +3,48 @@ import Link from 'next/link'
 
 export const revalidate = 0
 
-function pct(n: number, d: number) {
-  if (d === 0) return '—'
-  return `${Math.round((n / d) * 100)}%`
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'No data'
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(diff / 3600000)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(diff / 86400000)
+  return `${days}d ago`
 }
 
-function ctr(clicks: number, views: number) {
-  if (views === 0) return '—'
-  return `${((clicks / views) * 100).toFixed(1)}%`
-}
 
-function num(n: number | null | undefined) {
-  if (n == null) return '—'
-  return n.toLocaleString()
+const STATUS_COLOR: Record<string, string> = {
+  pending:   'rgba(232,160,64,0.8)',
+  in_review: 'rgba(91,184,182,0.8)',
+  verified:  'rgba(91,184,182,0.9)',
+  rejected:  'rgba(248,113,113,0.8)',
+  excluded:  'rgba(248,113,113,0.7)',
+}
+const STATUS_LABEL: Record<string, string> = {
+  pending:   'Submitted',
+  in_review: 'In review',
+  verified:  'Verified',
+  rejected:  'Rejected',
+  excluded:  'Excluded',
 }
 
 export default async function AdminOverview() {
   const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   const [
-    { count: verifiedCount },
-    { count: pendingCount },
-    { count: inReviewCount },
-    { count: noSchedulingCount },
-    { count: notAcceptingCount },
-    { count: totalCount },
-    { count: rejectedCount },
+    { count: verified },
+    { count: pending },
+    { count: inReview },
+    { count: noScheduling },
+    { count: notAccepting },
     { data: stateData },
-    { data: monthlyStats },
-    { data: searchEvents },
-    { data: allVerified },
+    { data: overdueQueue },
+    { data: recentActivity },
+    { data: lastSearch },
+    { data: lastStat },
   ] = await Promise.all([
     supabaseAdmin.from('providers').select('*', { count: 'exact', head: true })
       .eq('verification_status', 'verified').eq('status', 'active'),
@@ -48,333 +58,280 @@ export default async function AdminOverview() {
     supabaseAdmin.from('providers').select('*', { count: 'exact', head: true })
       .eq('verification_status', 'verified').eq('status', 'active')
       .eq('accepting_clients', false),
-    supabaseAdmin.from('providers').select('*', { count: 'exact', head: true }),
-    supabaseAdmin.from('providers').select('*', { count: 'exact', head: true })
-      .eq('verification_status', 'rejected'),
     supabaseAdmin.from('providers').select('state')
       .eq('verification_status', 'verified').eq('status', 'active'),
-    supabaseAdmin.from('provider_stats_named').select('provider_id, profile_views, booking_clicks, provider_name, stat_date')
-      .gte('stat_date', startOfMonth),
-    supabaseAdmin.from('search_events_readable').select('query, filters, results_count, created_at')
-      .gte('created_at', thirtyDaysAgo)
+    supabaseAdmin.from('providers')
+      .select('id, name, submitted_at')
+      .eq('verification_status', 'pending')
+      .not('submitted_at', 'is', null)
+      .lt('submitted_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString())
+      .order('submitted_at', { ascending: true }),
+    supabaseAdmin.from('providers')
+      .select('id, name, verification_status, submitted_at, verified_date')
+      .not('submitted_at', 'is', null)
+      .order('submitted_at', { ascending: false })
+      .limit(12),
+    supabaseAdmin.from('search_events_readable')
+      .select('created_at')
       .order('created_at', { ascending: false })
-      .limit(500),
-    supabaseAdmin.from('providers').select('created_at, verified_date, verification_status, status, scheduling_url')
-      .eq('verification_status', 'verified'),
+      .limit(1),
+    supabaseAdmin.from('provider_stats_named')
+      .select('stat_date')
+      .order('stat_date', { ascending: false })
+      .limit(1),
   ])
 
-  // Platform health
   const statesSet = new Set((stateData ?? []).map(p => p.state).filter(Boolean))
-  const statesCovered = statesSet.size
+  const queueUrgent = overdueQueue?.length ?? 0
+  const lastSearchDate = lastSearch?.[0]?.created_at ?? null
+  const lastStatDate   = lastStat?.[0]?.stat_date   ?? null
+  const queueTotal = (pending ?? 0) + (inReview ?? 0)
 
-  // Directory usage
-  const statsMap = new Map<string, { views: number; clicks: number; name: string }>()
-  for (const row of monthlyStats ?? []) {
-    const existing = statsMap.get(row.provider_id) ?? { views: 0, clicks: 0, name: row.provider_name ?? row.provider_id }
-    statsMap.set(row.provider_id, {
-      views: existing.views + (row.profile_views ?? 0),
-      clicks: existing.clicks + (row.booking_clicks ?? 0),
-      name: row.provider_name ?? existing.name,
-    })
+  // Build deduplicated activity timeline
+  type Event = { id: string; name: string; status: string; date: string }
+  const seen = new Set<string>()
+  const timeline: Event[] = []
+  for (const p of recentActivity ?? []) {
+    if (seen.has(p.id)) continue
+    seen.add(p.id)
+    const date = p.verification_status === 'verified' && p.verified_date
+      ? p.verified_date
+      : p.submitted_at!
+    timeline.push({ id: p.id, name: p.name, status: p.verification_status, date })
   }
-  const totalViews = Array.from(statsMap.values()).reduce((s, r) => s + r.views, 0)
-  const totalClicks = Array.from(statsMap.values()).reduce((s, r) => s + r.clicks, 0)
-  const topViewed = Array.from(statsMap.entries()).sort((a, b) => b[1].views - a[1].views).slice(0, 5)
-  const topClicked = Array.from(statsMap.entries()).sort((a, b) => b[1].clicks - a[1].clicks).slice(0, 5)
+  timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Search intelligence
-  const events = searchEvents ?? []
-  const queryCounts = new Map<string, number>()
-  let zeroResults = 0
-  let totalResultsSum = 0
-  let totalResultsCount = 0
-  for (const e of events) {
-    const q = (e.query ?? '').trim().toLowerCase()
-    if (q) queryCounts.set(q, (queryCounts.get(q) ?? 0) + 1)
-    if (e.results_count === 0) zeroResults++
-    if (e.results_count != null) { totalResultsSum += e.results_count; totalResultsCount++ }
-  }
-  const avgResults = totalResultsCount > 0 ? (totalResultsSum / totalResultsCount).toFixed(1) : '—'
-  const topQueries = Array.from(queryCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8)
-  const zeroResultQueries = events
-    .filter(e => e.results_count === 0 && (e.query ?? '').trim())
-    .reduce((acc, e) => {
-      const q = (e.query ?? '').trim().toLowerCase()
-      acc.set(q, (acc.get(q) ?? 0) + 1)
-      return acc
-    }, new Map<string, number>())
-  const topZeroQueries = Array.from(zeroResultQueries.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
-
-  // Provider funnel
-  const applied = totalCount ?? 0
-  const inReview = inReviewCount ?? 0
-  const verified = verifiedCount ?? 0
-  const bookable = (allVerified ?? []).filter(p => p.scheduling_url && p.status === 'active').length
-
-  // Avg days to verify — filter out data artifacts (negative or implausibly large values)
-  const verifiedProviders = (allVerified ?? []).filter(p => {
-    if (!p.verified_date || !p.created_at) return false
-    const days = (new Date(p.verified_date).getTime() - new Date(p.created_at).getTime()) / (1000 * 60 * 60 * 24)
-    return days >= 0 && days < 365
-  })
-  const avgDaysToVerify = verifiedProviders.length > 0
-    ? (verifiedProviders.reduce((s, p) => {
-        return s + (new Date(p.verified_date!).getTime() - new Date(p.created_at).getTime()) / (1000 * 60 * 60 * 24)
-      }, 0) / verifiedProviders.length).toFixed(1)
-    : '—'
-
-  const monthName = now.toLocaleString('en-US', { month: 'long' })
-  const queueTotal = (pendingCount ?? 0) + (inReviewCount ?? 0)
+  const attentionItems = [
+    ...(queueUrgent > 0 ? [{
+      label: `${queueUrgent} application${queueUrgent > 1 ? 's' : ''} waiting over 3 days`,
+      sub: 'Review the queue to keep providers moving through verification.',
+      href: '/admin/verification?tab=queue',
+      cta: 'Open queue →',
+    }] : []),
+    ...((noScheduling ?? 0) > 0 ? [{
+      label: `${noScheduling} verified provider${(noScheduling ?? 0) > 1 ? 's' : ''} with no scheduling URL`,
+      sub: 'These listings are visible but clients cannot book through Sila.',
+      href: '/admin/verification?tab=verified',
+      cta: 'View verified →',
+    }] : []),
+    ...((notAccepting ?? 0) > 0 ? [{
+      label: `${notAccepting} provider${(notAccepting ?? 0) > 1 ? 's' : ''} not accepting new clients`,
+      sub: 'Consider reaching out to confirm whether they want to remain listed.',
+      href: '/admin/verification?tab=verified',
+      cta: 'View verified →',
+    }] : []),
+  ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 48, paddingBottom: 48 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 36, paddingBottom: 48 }}>
 
-      {/* Page header */}
+      {/* Header */}
       <div>
-        <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(160,106,87,0.7)', marginBottom: 6 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(160,106,87,0.65)', marginBottom: 5 }}>
           Platform Overview
         </p>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#FBF7EF', letterSpacing: '-0.025em', lineHeight: 1.15, margin: 0 }}>
-          Dashboard
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#FBF7EF', letterSpacing: '-0.025em', lineHeight: 1.15, margin: 0 }}>
+          Overview
         </h1>
-        <p style={{ fontSize: 13, color: 'rgba(251,247,239,0.35)', marginTop: 5 }}>
-          {now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        <p style={{ fontSize: 12.5, color: 'rgba(251,247,239,0.32)', marginTop: 4 }}>
+          {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
         </p>
       </div>
 
-      {/* ── Section 1: Platform Health ── */}
-      <section>
-        <SectionHeader
-          label="Platform health"
-          description="Current state of the provider directory — who's live, who's waiting, and where coverage gaps exist."
-        />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-          <StatCard
-            label="Verified providers"
-            value={num(verifiedCount)}
-            accent="teal"
-            context="Active and visible in the public directory"
-          />
-          <StatCard
-            label="Pending review"
-            value={num(queueTotal)}
-            accent={queueTotal > 0 ? 'clay' : 'neutral'}
-            context={`${num(pendingCount)} new · ${num(inReviewCount)} needs more info`}
-            urgent={queueTotal > 0}
-            action={queueTotal > 0 ? { label: 'Go to queue →', href: '/admin/queue' } : undefined}
-          />
-          <StatCard
-            label="States covered"
-            value={statesCovered === 0 ? '—' : String(statesCovered)}
-            accent="neutral"
-            context="Distinct US states with ≥1 active provider"
-          />
-          <StatCard
-            label="Unbookable listings"
-            value={num(noSchedulingCount)}
-            accent={(noSchedulingCount ?? 0) > 0 ? 'warn' : 'neutral'}
-            context="Verified providers with no scheduling URL — clients can't book"
-          />
-          <StatCard
-            label="Not accepting"
-            value={num(notAcceptingCount)}
-            accent="neutral"
-            context="Visible in directory but closed to new referrals"
-          />
-        </div>
-      </section>
-
-      <Divider />
-
-      {/* ── Section 2: Directory Usage ── */}
-      <section>
-        <SectionHeader
-          label={`${monthName} directory usage`}
-          description="How clients are engaging with provider profiles this month. Views come from the web directory and app. Clicks are when a visitor follows a provider's scheduling link."
-        />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <StatCard
-            label="Profile views"
-            value={num(totalViews)}
-            accent="teal"
-            context="Sessions that opened a provider profile page"
-            large
-          />
-          <StatCard
-            label="Booking clicks"
-            value={num(totalClicks)}
-            accent="clay"
-            context="Visitors who clicked through to a provider's scheduling page"
-            large
-          />
-          <StatCard
-            label="Click-through rate"
-            value={ctr(totalClicks, totalViews)}
-            accent="neutral"
-            context="Share of profile views that converted to a booking click"
-            large
-          />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <GlassTable
-            title="Most viewed this month"
-            description="Providers whose profiles are getting the most traffic."
-            headers={['Provider', 'Views']}
-            rows={topViewed.map(([, v]) => [v.name, num(v.views)])}
-            empty="No view data recorded yet"
-          />
-          <GlassTable
-            title="Most clicked this month"
-            description="Providers generating the most booking link traffic — your top performers."
-            headers={['Provider', 'Clicks']}
-            rows={topClicked.map(([, v]) => [v.name, num(v.clicks)])}
-            empty="No click data recorded yet"
-          />
-        </div>
-      </section>
-
-      <Divider />
-
-      {/* ── Section 3: Search Intelligence ── */}
-      <section>
-        <SectionHeader
-          label="Search intelligence — last 30 days"
-          description="What clients are searching for in the directory. Zero-result searches are the most actionable: they show where the directory has gaps that new provider recruitment could fill."
-        />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <StatCard
-            label="Total searches"
-            value={num(events.length)}
-            accent="neutral"
-            context="Search queries fired in the directory over the last 30 days"
-          />
-          <StatCard
-            label="Zero-result searches"
-            value={num(zeroResults)}
-            accent={zeroResults > 5 ? 'warn' : 'neutral'}
-            context={`Queries that returned no providers · avg ${avgResults} results per search`}
-          />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <GlassTable
-            title="Top search queries"
-            description="The most common terms clients type. Use this to confirm your directory matches what people actually search for."
-            headers={['Query', 'Count']}
-            rows={topQueries.map(([q, c]) => [q || '(no text — filter-only search)', String(c)])}
-            empty="No search queries recorded yet"
-          />
-          <GlassTable
-            title="Zero-result searches"
-            description="Searches that came back empty. High counts on a specific term = a recruitment opportunity."
-            headers={['Query', 'Count']}
-            rows={topZeroQueries.map(([q, c]) => [q, String(c)])}
-            empty="No zero-result searches — good"
-            accentRows
-          />
-        </div>
-      </section>
-
-      <Divider />
-
-      {/* ── Section 4: Provider Funnel ── */}
-      <section>
-        <SectionHeader
-          label="Provider funnel"
-          description="The verification pipeline from application to bookable listing. Drop-off at each stage highlights where applications are stalling."
-        />
-        <GlassCard>
-          {/* Funnel steps */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, marginBottom: 20 }}>
-            <FunnelStep label="Applied"   count={applied}   sublabel="All submissions ever"              pctLabel={null}                    isFirst />
-            <FunnelStep label="In review" count={inReview}  sublabel="Awaiting additional verification"  pctLabel={`${pct(inReview, applied)} of applied`} />
-            <FunnelStep label="Verified"  count={verified}  sublabel="Cleared all checks"                pctLabel={`${pct(verified, applied)} of applied`} accent />
-            <FunnelStep label="Bookable"  count={bookable}  sublabel="Verified + has scheduling link"    pctLabel={`${pct(bookable, verified)} of verified`} accent isLast />
-          </div>
-
-          {/* Funnel meta row */}
-          <div style={{
-            borderTop: '1px solid rgba(26,92,90,0.18)',
-            paddingTop: 18,
-            display: 'flex',
-            gap: 40,
-            flexWrap: 'wrap',
-            alignItems: 'flex-end',
+      {/* Quick stat row */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Verified',  value: verified  ?? 0, color: '#5BB8B6' },
+          { label: 'In queue',  value: queueTotal,     color: queueTotal > 0 ? '#E8A040' : 'rgba(251,247,239,0.38)' },
+          { label: 'States',    value: statesSet.size, color: 'rgba(251,247,239,0.5)' },
+          { label: 'Unbookable',value: noScheduling ?? 0, color: (noScheduling ?? 0) > 0 ? '#E8A040' : 'rgba(251,247,239,0.25)' },
+        ].map(chip => (
+          <div key={chip.label} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 12px',
+            background: 'rgba(26,92,90,0.1)',
+            border: '1px solid rgba(26,92,90,0.2)',
+            borderRadius: 20,
           }}>
-            <MetaItem
-              label="Avg. days to verify"
-              value={avgDaysToVerify === '—' ? '—' : `${avgDaysToVerify} days`}
-              note="From submission to verified status"
-            />
-            <MetaItem
-              label="Rejected"
-              value={num(rejectedCount)}
-              note="Applications that failed verification"
-            />
-            <MetaItem
-              label="Verified → bookable drop-off"
-              value={pct(verified - bookable, verified)}
-              note="Verified providers still missing a scheduling URL"
-            />
-            <div style={{ marginLeft: 'auto' }}>
-              <Link href="/admin/queue" style={{ fontSize: 12, color: 'rgba(160,106,87,0.75)', textDecoration: 'none' }}>
-                Go to review queue →
-              </Link>
-            </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: chip.color, fontVariantNumeric: 'tabular-nums' }}>
+              {chip.value}
+            </span>
+            <span style={{ fontSize: 11, color: 'rgba(251,247,239,0.32)', fontWeight: 500 }}>
+              {chip.label}
+            </span>
           </div>
-        </GlassCard>
-      </section>
+        ))}
+      </div>
 
-      {/* Footer */}
-      <div style={{ borderTop: '1px solid rgba(26,92,90,0.12)', paddingTop: 20 }}>
-        <p style={{ fontSize: 12, color: 'rgba(251,247,239,0.22)' }}>
-          Page views, referral sources, geo, and device data →{' '}
-          <a href="https://us.posthog.com/project/461844" target="_blank" rel="noopener noreferrer"
-            style={{ color: 'rgba(160,106,87,0.55)', textDecoration: 'none' }}>
-            View in PostHog
-          </a>
-          <span style={{ marginLeft: 8, color: 'rgba(251,247,239,0.12)' }}>
-            (web-only analytics — referral traffic, session duration, geographic distribution)
-          </span>
-        </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+        {/* LEFT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Needs Attention */}
+          <Section label="Needs attention">
+            {attentionItems.length === 0 ? (
+              <GlassCard style={{ padding: '18px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: '#5BB8B6',
+                    boxShadow: '0 0 8px rgba(91,184,182,0.6)',
+                    flexShrink: 0,
+                  }}/>
+                  <span style={{ fontSize: 13, color: 'rgba(251,247,239,0.55)' }}>
+                    No issues — everything looks good
+                  </span>
+                </div>
+              </GlassCard>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {attentionItems.map((item, i) => (
+                  <GlassCard key={i} style={{ padding: '16px 20px', borderColor: 'rgba(232,160,64,0.28)' }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: '#E8A040',
+                        boxShadow: '0 0 6px rgba(232,160,64,0.55)',
+                        flexShrink: 0, marginTop: 5,
+                      }}/>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: 'rgba(251,247,239,0.8)', marginBottom: 3 }}>
+                          {item.label}
+                        </p>
+                        <p style={{ fontSize: 11.5, color: 'rgba(251,247,239,0.35)', lineHeight: 1.45, marginBottom: 8 }}>
+                          {item.sub}
+                        </p>
+                        <Link href={item.href} style={{ fontSize: 11, color: 'rgba(160,106,87,0.75)', textDecoration: 'none', fontWeight: 600 }}>
+                          {item.cta}
+                        </Link>
+                      </div>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            )}
+          </Section>
+
+          {/* System Status */}
+          <Section label="System status">
+            <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
+              {[
+                {
+                  label: 'Directory',
+                  sub: 'Provider data · public API',
+                  status: 'live' as const,
+                  detail: `${verified ?? 0} providers active`,
+                },
+                {
+                  label: 'Search tracking',
+                  sub: 'log_search_event RPC',
+                  status: (lastSearchDate ? 'live' : 'idle') as 'live' | 'idle',
+                  detail: lastSearchDate ? `Last event ${timeAgo(lastSearchDate)}` : 'No events recorded yet',
+                },
+                {
+                  label: 'Analytics tracking',
+                  sub: 'increment_provider_stat RPC',
+                  status: (lastStatDate ? 'live' : 'idle') as 'live' | 'idle',
+                  detail: lastStatDate ? `Last write ${timeAgo(lastStatDate)}` : 'No stats recorded yet',
+                },
+              ].map((row, i, arr) => (
+                <div key={row.label} style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 20px',
+                  borderBottom: i < arr.length - 1 ? '1px solid rgba(26,92,90,0.14)' : 'none',
+                }}>
+                  <div style={{
+                    width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                    background: row.status === 'live' ? '#5BB8B6' : 'rgba(251,247,239,0.2)',
+                    boxShadow: row.status === 'live' ? '0 0 7px rgba(91,184,182,0.5)' : 'none',
+                  }}/>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(251,247,239,0.72)', marginBottom: 1 }}>
+                      {row.label}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'rgba(251,247,239,0.28)' }}>{row.sub}</p>
+                  </div>
+                  <span style={{ fontSize: 11, color: 'rgba(251,247,239,0.3)', fontVariantNumeric: 'tabular-nums' }}>
+                    {row.detail}
+                  </span>
+                </div>
+              ))}
+            </GlassCard>
+          </Section>
+        </div>
+
+        {/* RIGHT COLUMN — Recent Activity */}
+        <Section label="Recent activity">
+          <GlassCard style={{ padding: 0, overflow: 'hidden', height: '100%' }}>
+            {timeline.length === 0 ? (
+              <div style={{ padding: '32px 20px', textAlign: 'center', color: 'rgba(251,247,239,0.22)', fontSize: 13 }}>
+                No provider activity yet
+              </div>
+            ) : (
+              <div>
+                {timeline.slice(0, 10).map((event, i) => (
+                  <Link
+                    key={`${event.id}-${i}`}
+                    href={`/admin/providers/${event.id}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 13,
+                      padding: '12px 20px',
+                      borderBottom: i < Math.min(timeline.length, 10) - 1 ? '1px solid rgba(26,92,90,0.12)' : 'none',
+                      textDecoration: 'none',
+                      transition: 'background 0.12s',
+                    }}
+                  >
+                    {/* Status dot */}
+                    <div style={{
+                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                      background: STATUS_COLOR[event.status] ?? 'rgba(251,247,239,0.3)',
+                    }}/>
+
+                    {/* Name + status */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        fontSize: 13, fontWeight: 500,
+                        color: 'rgba(251,247,239,0.78)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        marginBottom: 1,
+                      }}>
+                        {event.name}
+                      </p>
+                      <p style={{ fontSize: 11, color: 'rgba(251,247,239,0.3)' }}>
+                        {STATUS_LABEL[event.status] ?? event.status}
+                      </p>
+                    </div>
+
+                    {/* Time */}
+                    <span style={{ fontSize: 11, color: 'rgba(251,247,239,0.25)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                      {timeAgo(event.date)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </Section>
       </div>
 
     </div>
   )
 }
 
-/* ── Sub-components ── */
-
-function Divider() {
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{
-      height: 1,
-      background: 'linear-gradient(90deg, rgba(26,92,90,0.25) 0%, rgba(26,92,90,0.08) 60%, transparent 100%)',
-      margin: '-8px 0',
-    }} />
-  )
-}
-
-function SectionHeader({ label, description }: { label: string; description: string }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
+    <div>
       <p style={{
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: 'rgba(251,247,239,0.32)',
-        marginBottom: 4,
+        fontSize: 9.5, fontWeight: 700, letterSpacing: '0.15em',
+        textTransform: 'uppercase', color: 'rgba(251,247,239,0.24)',
+        marginBottom: 8,
       }}>
         {label}
       </p>
-      <p style={{
-        fontSize: 13,
-        color: 'rgba(251,247,239,0.42)',
-        lineHeight: 1.5,
-        maxWidth: 680,
-      }}>
-        {description}
-      </p>
+      {children}
     </div>
   )
 }
@@ -386,259 +343,11 @@ function GlassCard({ children, style }: { children: React.ReactNode; style?: Rea
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
       border: '1px solid rgba(26,92,90,0.22)',
-      borderRadius: 14,
-      padding: '20px 24px',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(251,247,239,0.04)',
+      borderRadius: 13,
+      boxShadow: '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(251,247,239,0.04)',
       ...style,
     }}>
       {children}
-    </div>
-  )
-}
-
-type Accent = 'teal' | 'clay' | 'warn' | 'neutral'
-
-const ACCENT_BORDER: Record<Accent, string> = {
-  teal:    'rgba(26,92,90,0.45)',
-  clay:    'rgba(160,106,87,0.45)',
-  warn:    'rgba(193,125,60,0.45)',
-  neutral: 'rgba(26,92,90,0.22)',
-}
-const ACCENT_BAR: Record<Accent, string> = {
-  teal:    '#1A5C5A',
-  clay:    '#A06A57',
-  warn:    '#C17D3C',
-  neutral: 'transparent',
-}
-const ACCENT_TEXT: Record<Accent, string> = {
-  teal:    '#5BB8B6',
-  clay:    '#D4956A',
-  warn:    '#E8A040',
-  neutral: '#FBF7EF',
-}
-
-function StatCard({
-  label, value, context, accent = 'neutral', large, urgent, action,
-}: {
-  label: string
-  value: string
-  context: string
-  accent?: Accent
-  large?: boolean
-  urgent?: boolean
-  action?: { label: string; href: string }
-}) {
-  return (
-    <div style={{
-      background: 'rgba(26,92,90,0.07)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      border: `1px solid ${ACCENT_BORDER[accent]}`,
-      borderRadius: 14,
-      padding: large ? '22px 22px 18px' : '18px 18px 14px',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(251,247,239,0.04)',
-      position: 'relative',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* top accent bar */}
-      {accent !== 'neutral' && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: `linear-gradient(90deg, ${ACCENT_BAR[accent]}, transparent)`,
-          opacity: 0.7,
-        }} />
-      )}
-      {/* urgency dot */}
-      {urgent && (
-        <div style={{
-          position: 'absolute', top: 12, right: 12,
-          width: 7, height: 7, borderRadius: '50%',
-          background: '#E8A040',
-          boxShadow: '0 0 8px rgba(232,160,64,0.55)',
-        }} />
-      )}
-
-      <p style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-        textTransform: 'uppercase', color: 'rgba(251,247,239,0.35)',
-        marginBottom: 10,
-      }}>
-        {label}
-      </p>
-
-      <p style={{
-        fontSize: large ? 40 : 32,
-        fontWeight: 700,
-        lineHeight: 1,
-        color: ACCENT_TEXT[accent],
-        letterSpacing: '-0.03em',
-        fontVariantNumeric: 'tabular-nums',
-        marginBottom: 10,
-      }}>
-        {value}
-      </p>
-
-      <p style={{
-        fontSize: 12,
-        color: 'rgba(251,247,239,0.32)',
-        lineHeight: 1.45,
-        flexGrow: 1,
-      }}>
-        {context}
-      </p>
-
-      {action && (
-        <Link href={action.href} style={{
-          marginTop: 10,
-          fontSize: 11,
-          color: 'rgba(160,106,87,0.75)',
-          textDecoration: 'none',
-          fontWeight: 500,
-        }}>
-          {action.label}
-        </Link>
-      )}
-    </div>
-  )
-}
-
-function GlassTable({
-  title, description, headers, rows, empty, accentRows,
-}: {
-  title: string
-  description: string
-  headers: string[]
-  rows: string[][]
-  empty: string
-  accentRows?: boolean
-}) {
-  return (
-    <div style={{
-      background: 'rgba(26,92,90,0.07)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      border: '1px solid rgba(26,92,90,0.22)',
-      borderRadius: 14,
-      overflow: 'hidden',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(251,247,239,0.04)',
-    }}>
-      {/* Table header */}
-      <div style={{
-        padding: '14px 20px 12px',
-        borderBottom: '1px solid rgba(26,92,90,0.18)',
-      }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: 'rgba(251,247,239,0.72)', margin: '0 0 3px' }}>{title}</p>
-        <p style={{ fontSize: 11, color: 'rgba(251,247,239,0.28)', margin: 0, lineHeight: 1.4 }}>{description}</p>
-      </div>
-
-      {rows.length === 0 ? (
-        <div style={{ padding: '28px 20px', fontSize: 13, color: 'rgba(251,247,239,0.2)', textAlign: 'center' }}>
-          {empty}
-        </div>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid rgba(26,92,90,0.14)' }}>
-              {headers.map((h, i) => (
-                <th key={i} style={{
-                  padding: '8px 20px',
-                  textAlign: i === 0 ? 'left' : 'right',
-                  fontSize: 10, fontWeight: 700,
-                  letterSpacing: '0.1em', textTransform: 'uppercase',
-                  color: 'rgba(251,247,239,0.22)',
-                }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, ri) => (
-              <tr key={ri} style={{ borderBottom: ri < rows.length - 1 ? '1px solid rgba(26,92,90,0.10)' : 'none' }}>
-                {row.map((cell, ci) => (
-                  <td key={ci} style={{
-                    padding: '10px 20px',
-                    fontSize: 13,
-                    textAlign: ci === 0 ? 'left' : 'right',
-                    color: ci === 0
-                      ? (accentRows ? 'rgba(232,160,64,0.85)' : 'rgba(251,247,239,0.7)')
-                      : 'rgba(251,247,239,0.38)',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}>
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  )
-}
-
-function FunnelStep({ label, count, sublabel, pctLabel, isFirst, isLast, accent }: {
-  label: string; count: number; sublabel: string; pctLabel: string | null
-  isFirst?: boolean; isLast?: boolean; accent?: boolean
-}) {
-  return (
-    <div style={{
-      padding: '18px 24px',
-      borderRight: isLast ? 'none' : '1px solid rgba(26,92,90,0.18)',
-      position: 'relative',
-    }}>
-      {!isFirst && (
-        <div style={{
-          position: 'absolute', left: -1, top: '50%', transform: 'translateY(-50%) translateY(-10px)',
-          fontSize: 16, color: 'rgba(26,92,90,0.4)', lineHeight: 1,
-        }}>›</div>
-      )}
-      <p style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
-        textTransform: 'uppercase',
-        color: accent ? 'rgba(91,184,182,0.65)' : 'rgba(251,247,239,0.28)',
-        marginBottom: 8,
-      }}>
-        {label}
-      </p>
-      <p style={{
-        fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1,
-        color: accent ? '#5BB8B6' : '#FBF7EF',
-        fontVariantNumeric: 'tabular-nums',
-        marginBottom: 6,
-      }}>
-        {count.toLocaleString()}
-      </p>
-      <p style={{ fontSize: 11, color: 'rgba(251,247,239,0.28)', marginBottom: pctLabel ? 4 : 0 }}>
-        {sublabel}
-      </p>
-      {pctLabel && (
-        <p style={{ fontSize: 11, color: accent ? 'rgba(91,184,182,0.5)' : 'rgba(251,247,239,0.18)', fontWeight: 600 }}>
-          {pctLabel}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function MetaItem({ label, value, note }: { label: string; value: string; note: string }) {
-  return (
-    <div>
-      <p style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-        textTransform: 'uppercase', color: 'rgba(251,247,239,0.22)',
-        marginBottom: 3,
-      }}>
-        {label}
-      </p>
-      <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(251,247,239,0.65)', marginBottom: 2 }}>
-        {value}
-      </p>
-      <p style={{ fontSize: 11, color: 'rgba(251,247,239,0.22)' }}>
-        {note}
-      </p>
     </div>
   )
 }
