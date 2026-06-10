@@ -7,6 +7,7 @@ export async function GET() {
     .select('id, slug, name, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, sliding_scale, visit_type, photo_url')
     .eq('verification_status', 'verified')
     .eq('status', 'active')
+    .eq('directory_consent', true)
     .order('name', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

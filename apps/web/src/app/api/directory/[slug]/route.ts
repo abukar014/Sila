@@ -13,6 +13,7 @@ export async function GET(
     .eq('slug', slug)
     .eq('verification_status', 'verified')
     .eq('status', 'active')
+    .eq('directory_consent', true)
     .single()
 
   if (error || !data) return NextResponse.json({ error: 'Provider not found' }, { status: 404 })
