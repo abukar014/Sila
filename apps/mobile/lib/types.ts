@@ -24,6 +24,8 @@ export type Provider = {
   accepting_clients: boolean | null
   verified_date: string | null
   gender: string | null
+  sliding_scale?: boolean
+  age_groups?: string[] | null
 }
 
 export function initials(name: string) {

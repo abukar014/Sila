@@ -70,6 +70,7 @@ export default function AccountScreen() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [dob, setDob] = useState('')
+  const [directoryConsent, setDirectoryConsent] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -79,6 +80,7 @@ export default function AccountScreen() {
     if (!fullName || !email || !password) { setError('All fields are required.'); return }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (!directoryConsent) { setError('Please check the consent box to continue.'); return }
 
     setLoading(true)
     try {
@@ -108,7 +110,7 @@ export default function AccountScreen() {
       // Requires "providers_self_update" RLS policy allowing update where jwt email = row email
       const { data: claimed } = await supabase
         .from('providers')
-        .update({ user_id: authData.user.id, name: fullName, dob: dobToISO(dob) })
+        .update({ user_id: authData.user.id, name: fullName, dob: dobToISO(dob), directory_consent: true })
         .eq('email', email)
         .is('user_id', null)
         .select('id')
@@ -126,6 +128,7 @@ export default function AccountScreen() {
             slug: toSlug(fullName),
             user_id: authData.user.id,
             dob: dobToISO(dob),
+            directory_consent: true,
             verification_status: 'pending',
             status: 'inactive',
           })
@@ -274,6 +277,19 @@ export default function AccountScreen() {
             <Text style={styles.privacyLink}>Privacy Policy.</Text>
           </Text>
 
+          {/* Directory consent */}
+          <Pressable
+            onPress={() => setDirectoryConsent(v => !v)}
+            style={styles.consentRow}
+          >
+            <View style={[styles.consentBox, directoryConsent && styles.consentBoxChecked]}>
+              {directoryConsent && <Text style={styles.consentCheck}>✓</Text>}
+            </View>
+            <Text style={styles.consentText}>
+              By creating an account, I consent to my profile being listed in the Sila directory if my credentials are verified and approved. I understand that applying does not guarantee approval.
+            </Text>
+          </Pressable>
+
           <View style={styles.signInRow}>
             <Text style={styles.signInLabel}>Already have an account? </Text>
             <Pressable onPress={() => router.push('/(auth)/sign-in')}>
@@ -415,6 +431,42 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_600SemiBold',
     color: colors.teal,
     textDecorationLine: 'underline',
+  },
+
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 20,
+  },
+  consentBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(31,27,22,0.28)',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  consentBoxChecked: {
+    borderColor: colors.teal,
+    backgroundColor: 'rgba(26,92,90,0.10)',
+  },
+  consentCheck: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 11,
+    color: colors.teal,
+    lineHeight: 14,
+  },
+  consentText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 12,
+    lineHeight: 19,
+    color: 'rgba(31,27,22,0.54)',
+    flex: 1,
   },
 
   signInRow: {

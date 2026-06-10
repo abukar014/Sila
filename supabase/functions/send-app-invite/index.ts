@@ -113,7 +113,7 @@ serve(async (req: Request) => {
   try {
     const body = await req.json()
     console.log('send-app-invite received:', JSON.stringify({ email: body.email, name: body.name }))
-    const { email, name, license_type, license_number, state, npi, dob } = body
+    const { email, name, license_type, license_number, state, npi, dob, directory_consent } = body
     if (!email || !name) {
       return new Response(JSON.stringify({ error: 'email and name are required' }), {
         status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -137,8 +137,9 @@ serve(async (req: Request) => {
         license_type:   license_type  || null,
         license_number: license_number || null,
         state:          state ? String(state).toUpperCase() : null,
-        npi:            npi   || null,
-        dob:            dob   || null,
+        npi:               npi   || null,
+        dob:               dob   || null,
+        directory_consent: directory_consent === true,
         verification_status: 'pending',
         status: 'inactive',
       })

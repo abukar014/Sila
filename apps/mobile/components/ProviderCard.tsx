@@ -4,20 +4,30 @@ import { BlurView } from 'expo-blur'
 import { colors, radius, shadow, glassBorder, glassHighlight, GLASS_BG, GLASS_BLUR } from '../lib/tokens'
 import { Provider, initials, avatarColor, modalityLabel, toArr } from '../lib/types'
 
+const FAITH_LABELS: Record<string, string> = {
+  faith_integrated: 'Faith-integrated',
+  faith_sensitive:  'Faith-sensitive',
+  faith_neutral:    'Faith-neutral',
+  secular:          'Secular',
+}
+
 type Props = {
   provider: Provider
   onPress: () => void
 }
 
-
 export function ProviderCard({ provider: p, onPress }: Props) {
   const [photoError, setPhotoError] = useState(false)
-  const init = initials(p.name)
-  const color = avatarColor(p.name)
-  const creds = [p.license_type || p.credentials, p.state].filter(Boolean).join(' · ')
-  const specs = toArr(p.specialties).slice(0, 3)
+  const init     = initials(p.name)
+  const color    = avatarColor(p.name)
+  const creds    = [p.license_type || p.credentials, p.state].filter(Boolean).join(' · ')
+  const allSpecs = toArr(p.specialties)
+  const specs    = allSpecs.slice(0, 2)
+  const moreCount = allSpecs.length - 2
   const accepting = p.accepting_clients === true
-  const modality = modalityLabel(p)
+  const modality  = modalityLabel(p)
+  const faithLabel = p.faith_approach ? (FAITH_LABELS[p.faith_approach] ?? null) : null
+  const langs    = toArr(p.languages).slice(0, 2).join(', ')
 
   return (
     <Pressable
@@ -28,7 +38,6 @@ export function ProviderCard({ provider: p, onPress }: Props) {
       <View style={glassHighlight} />
       <View style={styles.inner}>
 
-        {/* Avatar — outer handles border, inner handles overflow clip */}
         <View style={[styles.avatarOuter, { backgroundColor: color }]}>
           <View style={styles.avatarInner}>
             {p.photo_url && !photoError
@@ -38,12 +47,13 @@ export function ProviderCard({ provider: p, onPress }: Props) {
           </View>
         </View>
 
-        {/* Info */}
         <View style={styles.info}>
-          <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
-          </View>
+          <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
           <Text style={styles.creds} numberOfLines={1}>{creds}</Text>
+
+          {faithLabel && (
+            <Text style={styles.faith} numberOfLines={1}>{faithLabel}</Text>
+          )}
 
           {specs.length > 0 && (
             <View style={styles.tags}>
@@ -52,10 +62,16 @@ export function ProviderCard({ provider: p, onPress }: Props) {
                   <Text style={[styles.tagText, i === 0 && styles.tagTextWarm]}>{s}</Text>
                 </View>
               ))}
+              {moreCount > 0 && (
+                <View style={styles.tagMore}>
+                  <Text style={styles.tagMoreText}>+{moreCount}</Text>
+                </View>
+              )}
             </View>
           )}
 
           <View style={styles.metaRow}>
+            {langs ? <Text style={styles.meta}>{langs} · </Text> : null}
             <Text style={styles.meta}>{modality}</Text>
             {accepting
               ? <Text style={styles.accepting}>· Open</Text>
@@ -64,7 +80,6 @@ export function ProviderCard({ provider: p, onPress }: Props) {
           </View>
         </View>
 
-        {/* Chevron */}
         <Text style={styles.chevron}>›</Text>
       </View>
     </Pressable>
@@ -107,23 +122,23 @@ const styles = StyleSheet.create({
 
   info: { flex: 1, gap: 3 },
 
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: {
     fontFamily: 'DMSans_600SemiBold',
     fontSize: 15,
     color: colors.ink,
-    flex: 1,
-  },
-  acceptingDot: {
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: colors.verified,
-    flexShrink: 0,
   },
 
   creds: {
     fontFamily: 'DMSans_400Regular',
     fontSize: 11.5,
     color: colors.ink54,
+  },
+
+  faith: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 11,
+    color: colors.teal,
+    marginTop: 1,
   },
 
   tags: { flexDirection: 'row', gap: 5, flexWrap: 'wrap', marginTop: 4 },
@@ -144,6 +159,19 @@ const styles = StyleSheet.create({
     color: colors.teal,
   },
   tagTextWarm: { color: colors.clay },
+
+  tagMore: {
+    paddingHorizontal: 8, paddingVertical: 2,
+    borderRadius: 100,
+    backgroundColor: 'rgba(31,27,22,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(31,27,22,0.12)',
+  },
+  tagMoreText: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 10.5,
+    color: colors.ink54,
+  },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   meta: {

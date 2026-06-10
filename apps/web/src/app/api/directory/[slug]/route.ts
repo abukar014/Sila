@@ -9,7 +9,7 @@ export async function GET(
 
   const { data, error } = await supabaseAdmin
     .from('providers')
-    .select('id, slug, name, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, visit_type, photo_url, verification_status, status')
+    .select('id, slug, name, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, sliding_scale, visit_type, photo_url, verification_status, status')
     .eq('slug', slug)
     .eq('verification_status', 'verified')
     .eq('status', 'active')

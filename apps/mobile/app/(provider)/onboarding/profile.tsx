@@ -49,6 +49,14 @@ const APPROACH_OPTIONS = [
   'ERP', 'IFS', 'Psychodynamic', 'Solution-focused',
 ]
 
+const AGE_GROUP_OPTIONS = [
+  { label: 'Children (6–12)',      value: 'children' },
+  { label: 'Teens (13–17)',        value: 'teens' },
+  { label: 'Young Adults (18–24)', value: 'young_adults' },
+  { label: 'Adults (25–64)',       value: 'adults' },
+  { label: 'Seniors (65+)',        value: 'seniors' },
+]
+
 const PULL_QUOTE_MAX = 180
 const BIO_MAX = 600
 
@@ -113,6 +121,8 @@ export default function ProfileScreen() {
   const [feeIndividual, setFeeIndividual]   = useState('')
   const [feeCouples, setFeeCouples]         = useState('')
   const [feeInitial, setFeeInitial]         = useState('')
+  const [slidingScale, setSlidingScale]     = useState(false)
+  const [ageGroups, setAgeGroups]           = useState<string[]>([])
   const [error, setError]                   = useState('')
   const [loading, setLoading]               = useState(false)
 
@@ -122,7 +132,7 @@ export default function ProfileScreen() {
       if (!providerId) return
       const { data } = await supabase
         .from('providers')
-        .select('photo_url, faith_approach, telehealth, in_person, languages, pull_quote, bio, scheduling_url, specialties, approaches, insurances, fee_individual, fee_couples, fee_initial')
+        .select('photo_url, faith_approach, telehealth, in_person, languages, pull_quote, bio, scheduling_url, specialties, approaches, insurances, fee_individual, fee_couples, fee_initial, sliding_scale, age_groups')
         .eq('id', providerId)
         .single()
       if (!data) return
@@ -140,6 +150,8 @@ export default function ProfileScreen() {
       if (data.fee_individual) setFeeIndividual(data.fee_individual)
       if (data.fee_couples)   setFeeCouples(data.fee_couples)
       if (data.fee_initial)   setFeeInitial(data.fee_initial)
+      if (data.sliding_scale != null) setSlidingScale(data.sliding_scale)
+      if (data.age_groups)    setAgeGroups(data.age_groups ?? [])
     }
     loadExisting()
   }, [])
@@ -225,10 +237,12 @@ export default function ProfileScreen() {
           scheduling_url: schedulingUrl.trim(),
           specialties,
           approaches,
+          age_groups:     ageGroups,
           insurances,
           fee_individual: feeIndividual || null,
           fee_couples:    feeCouples || null,
           fee_initial:    feeInitial || null,
+          sliding_scale:  slidingScale,
         })
         .eq('id', providerId)
 
@@ -359,6 +373,27 @@ export default function ProfileScreen() {
               autoCapitalize="words"
             />
           </InputCard>
+
+          {/* ── Age groups ── */}
+          <SectionLabel text="Clients I work with" />
+          <Text style={styles.sectionHint}>Which age groups do you see? Tap all that apply.</Text>
+          <View style={[styles.inputCard, shadow.subtle]}>
+            <View style={glassHighlight} />
+            <View style={styles.quickAddChips}>
+              {AGE_GROUP_OPTIONS.map(opt => {
+                const active = ageGroups.includes(opt.value)
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setAgeGroups(p => active ? p.filter(x => x !== opt.value) : [...p, opt.value])}
+                    style={[styles.quickChip, active && styles.quickChipSelected]}
+                  >
+                    <Text style={[styles.quickChipText, active && styles.quickChipTextSelected]}>{opt.label}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
 
           {/* ── Focus areas ── */}
           <SectionLabel text="Focus areas" />
@@ -612,6 +647,20 @@ export default function ProfileScreen() {
                 />
               </View>
             ))}
+            <View style={[styles.feeRow, styles.feeRowBorder]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.feeLabel}>Sliding scale available</Text>
+                <Text style={styles.slidingScaleHint}>I adjust my rate based on income</Text>
+              </View>
+              <Pressable
+                onPress={() => setSlidingScale(v => !v)}
+                style={[styles.toggle, slidingScale && styles.toggleOn]}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: slidingScale }}
+              >
+                <View style={[styles.toggleThumb, slidingScale && styles.toggleThumbOn]} />
+              </Pressable>
+            </View>
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -1008,5 +1057,39 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: colors.paper,
+  },
+
+  slidingScaleHint: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(31,27,22,0.40)',
+    marginTop: 2,
+  },
+  toggle: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(31,27,22,0.14)',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    flexShrink: 0,
+  },
+  toggleOn: {
+    backgroundColor: colors.teal,
+  },
+  toggleThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  toggleThumbOn: {
+    alignSelf: 'flex-end',
   },
 })

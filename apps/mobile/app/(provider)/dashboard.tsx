@@ -9,6 +9,7 @@ import { router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
 import { colors, shadow, glassBorder, glassHighlight } from '../../lib/tokens'
+import { calcCompleteness } from '../../lib/providerInsights'
 
 type Provider = {
   id: string
@@ -25,6 +26,12 @@ type Provider = {
   status: string | null
   welcome_seen: boolean
   scheduling_url: string | null
+  specialties: string[] | null
+  faith_approach: string | null
+  languages: string[] | null
+  telehealth: boolean
+  in_person: boolean
+  sliding_scale: boolean
 }
 
 function initials(name: string) {
@@ -69,6 +76,8 @@ export default function DashboardScreen() {
   const [dismissingBanner, setDismissingBanner] = useState(false)
   const [photoFailed, setPhotoFailed] = useState(false)
 
+  const [completenessHidden, setCompletenessHidden] = useState(false)
+
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -76,12 +85,13 @@ export default function DashboardScreen() {
     if (!id) { router.replace('/(auth)/sign-in'); return }
     const { data } = await supabase
       .from('providers')
-      .select('id, slug, name, photo_url, credentials, license_type, state, verified_date, accepting_clients, bio, verification_status, status, welcome_seen, scheduling_url')
+      .select('id, slug, name, photo_url, credentials, license_type, state, verified_date, accepting_clients, bio, verification_status, status, welcome_seen, scheduling_url, specialties, faith_approach, languages, telehealth, in_person, sliding_scale')
       .eq('id', id)
       .single()
     if (!data) { router.replace('/(auth)/sign-in'); return }
     setProvider(data)
     setLoading(false)
+    supabase.from('providers').update({ last_active_at: new Date().toISOString() }).eq('id', data.id)
   }
 
   async function toggleAccepting() {
@@ -109,7 +119,7 @@ export default function DashboardScreen() {
     setSigningOut(true)
     await supabase.auth.signOut()
     await AsyncStorage.removeItem('sila_provider_id')
-    router.replace('/(auth)/sign-in')
+    router.replace('/')
   }
 
   if (loading) {
@@ -156,6 +166,8 @@ export default function DashboardScreen() {
 
   // ── Verified dashboard ───────────────────────────────────────────────────
 
+  const { score: completenessScore, gaps: completenessGaps } = calcCompleteness(provider)
+
   const firstName    = provider.name.split(' ')[0]
   const cred         = [provider.credentials || provider.license_type, provider.state].filter(Boolean).join(' · ')
   const verifiedDate = provider.verified_date
@@ -185,6 +197,12 @@ export default function DashboardScreen() {
       title: 'Scheduling link',
       subtitle: schedulingShort,
       onPress: () => router.push('/(provider)/edit-scheduling'),
+    },
+    {
+      icon: '◑',
+      title: 'Data & Insights',
+      subtitle: 'Profile reach & visibility',
+      onPress: () => router.push('/(provider)/insights'),
     },
   ]
 
@@ -228,6 +246,45 @@ export default function DashboardScreen() {
           {/* Welcome */}
           <Text style={styles.welcomeLabel}>Welcome back</Text>
           <Text style={styles.welcomeName}>{firstName}</Text>
+
+          {/* ── Profile completeness nudge ─────────────────────────── */}
+          {completenessScore < 100 && !completenessHidden && (
+            <View style={[styles.card, shadow.subtle, { marginBottom: 20 }]}>
+              <View style={glassHighlight} />
+              <View style={styles.nudgeHeader}>
+                <Text style={styles.nudgeTitle}>Profile strength</Text>
+                <Text style={styles.nudgePct}>{completenessScore}%</Text>
+                <Pressable onPress={() => setCompletenessHidden(true)} hitSlop={12} style={{ marginLeft: 10 }}>
+                  <Text style={styles.nudgeDismiss}>✕</Text>
+                </Pressable>
+              </View>
+              <View style={styles.completenessBar}>
+                <View style={[styles.completenessBarFill, { width: `${completenessScore}%` }]} />
+              </View>
+              {completenessGaps.slice(0, 2).length > 0 && (
+                <>
+                  <View style={styles.divider} />
+                  {completenessGaps.slice(0, 2).map((gap, i) => (
+                    <Pressable
+                      key={gap}
+                      onPress={() => router.push(
+                        gap.includes('scheduling') ? '/(provider)/edit-scheduling' : '/(provider)/edit-profile'
+                      )}
+                      style={({ pressed }) => [
+                        styles.gapRow,
+                        i === 0 && completenessGaps.length > 1 && styles.gapBorder,
+                        pressed && { opacity: 0.6 },
+                      ]}
+                    >
+                      <Text style={styles.gapBullet}>+</Text>
+                      <Text style={styles.gapText}>{gap}</Text>
+                      <Text style={styles.gapArrow}>›</Text>
+                    </Pressable>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
 
           {/* ── Profile snapshot ───────────────────────────────────── */}
           <View style={[styles.card, shadow.subtle]}>
@@ -556,4 +613,71 @@ const styles = StyleSheet.create({
   // ── Sign out ───────────────────────────────────────────────────
   signOutBtn: { alignItems: 'center', paddingVertical: 12 },
   signOutText: { fontFamily: 'DMSans_600SemiBold', fontSize: 13, color: colors.teal },
+
+  // ── Profile completeness nudge ─────────────────────────────────
+  nudgeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  nudgeTitle: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 20,
+    flex: 1,
+  },
+  nudgePct: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 14,
+    color: colors.teal,
+    lineHeight: 20,
+  },
+  nudgeDismiss: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 14,
+    color: 'rgba(31,27,22,0.28)',
+    lineHeight: 20,
+  },
+  completenessBar: {
+    height: 6,
+    backgroundColor: 'rgba(26,92,90,0.12)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  completenessBarFill: {
+    height: 6,
+    backgroundColor: colors.teal,
+    borderRadius: 3,
+  },
+  gapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 9,
+  },
+  gapBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(160,106,87,0.08)',
+  },
+  gapBullet: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 14,
+    color: colors.clay,
+    lineHeight: 18,
+    width: 14,
+  },
+  gapText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 20,
+    flex: 1,
+  },
+  gapArrow: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 18,
+    color: 'rgba(31,27,22,0.25)',
+    lineHeight: 22,
+  },
 })

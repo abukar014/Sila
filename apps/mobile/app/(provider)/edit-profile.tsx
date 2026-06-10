@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   View, Text, TextInput, Pressable, ScrollView,
-  StyleSheet, ActivityIndicator, Image,
+  StyleSheet, ActivityIndicator, Image, Switch,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -31,6 +31,14 @@ const APPROACH_OPTIONS = [
   'CBT', 'DBT', 'EMDR', 'ACT', 'Gottman method',
   'Narrative therapy', 'Somatic therapy', 'Mindfulness',
   'ERP', 'IFS', 'Psychodynamic', 'Solution-focused',
+]
+
+const AGE_GROUP_OPTIONS = [
+  { label: 'Children (6–12)',      value: 'children' },
+  { label: 'Teens (13–17)',        value: 'teens' },
+  { label: 'Young Adults (18–24)', value: 'young_adults' },
+  { label: 'Adults (25–64)',       value: 'adults' },
+  { label: 'Seniors (65+)',        value: 'seniors' },
 ]
 
 const PULL_QUOTE_MAX = 180
@@ -75,6 +83,8 @@ export default function EditProfileScreen() {
   const [feeIndividual, setFeeIndividual] = useState('')
   const [feeCouples, setFeeCouples]   = useState('')
   const [feeInitial, setFeeInitial]   = useState('')
+  const [slidingScale, setSlidingScale] = useState(false)
+  const [ageGroups, setAgeGroups]     = useState<string[]>([])
   const [gender, setGender]           = useState<string | null>(null)
   const [loading, setLoading]         = useState(true)
   const [saving, setSaving]           = useState(false)
@@ -88,7 +98,7 @@ export default function EditProfileScreen() {
       setProviderId(id)
       const { data } = await supabase
         .from('providers')
-        .select('photo_url, bio, pull_quote, scheduling_url, languages, faith_approach, telehealth, in_person, specialties, approaches, insurances, fee_individual, fee_couples, fee_initial, gender')
+        .select('photo_url, bio, pull_quote, scheduling_url, languages, faith_approach, telehealth, in_person, specialties, approaches, insurances, fee_individual, fee_couples, fee_initial, sliding_scale, gender, age_groups')
         .eq('id', id)
         .single()
       if (data) {
@@ -106,6 +116,8 @@ export default function EditProfileScreen() {
         if (data.fee_individual) setFeeIndividual(data.fee_individual)
         if (data.fee_couples)   setFeeCouples(data.fee_couples)
         if (data.fee_initial)   setFeeInitial(data.fee_initial)
+        if (data.sliding_scale != null) setSlidingScale(data.sliding_scale)
+        if (data.age_groups)    setAgeGroups(data.age_groups ?? [])
         setGender(data.gender ?? null)
       }
       setLoading(false)
@@ -182,10 +194,12 @@ export default function EditProfileScreen() {
         faith_approach: faithApproach,
         specialties,
         approaches,
+        age_groups:     ageGroups,
         insurances,
         fee_individual: feeIndividual || null,
         fee_couples:    feeCouples || null,
         fee_initial:    feeInitial || null,
+        sliding_scale:  slidingScale,
       })
       .eq('id', providerId)
 
@@ -388,6 +402,26 @@ export default function EditProfileScreen() {
             })}
           </View>
 
+          {/* Age groups */}
+          <SectionLabel text="Clients I work with" />
+          <View style={[styles.inputCard, shadow.subtle]}>
+            <View style={glassHighlight} />
+            <View style={styles.quickAddChips}>
+              {AGE_GROUP_OPTIONS.map(opt => {
+                const active = ageGroups.includes(opt.value)
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => { setAgeGroups(p => active ? p.filter(x => x !== opt.value) : [...p, opt.value]); setSaved(false) }}
+                    style={[styles.quickChip, active && styles.quickChipSelected]}
+                  >
+                    <Text style={[styles.quickChipText, active && styles.quickChipTextSelected]}>{opt.label}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
+
           {/* Focus areas */}
           <SectionLabel text="Focus areas" />
           <View style={[styles.inputCard, shadow.subtle]}>
@@ -576,6 +610,19 @@ export default function EditProfileScreen() {
                 />
               </View>
             ))}
+            <View style={[styles.feeRow, styles.feeRowBorder, { alignItems: 'center' }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.feeLabel}>Sliding scale available</Text>
+                <Text style={styles.slidingHint}>I adjust my rate based on income</Text>
+              </View>
+              <Switch
+                value={slidingScale}
+                onValueChange={v => { setSlidingScale(v); setSaved(false) }}
+                trackColor={{ false: 'rgba(31,27,22,0.14)', true: colors.teal }}
+                thumbColor={colors.paper}
+                ios_backgroundColor="rgba(31,27,22,0.14)"
+              />
+            </View>
           </View>
 
           {!!error && <Text style={styles.errorText}>{error}</Text>}
@@ -722,6 +769,7 @@ const styles = StyleSheet.create({
   feeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   feeRowBorder: { borderTopWidth: 1, borderTopColor: 'rgba(160,106,87,0.12)' },
   feeLabel: { fontFamily: 'DMSans_400Regular', fontSize: 13, color: 'rgba(31,27,22,0.60)', flex: 1 },
+  slidingHint: { fontFamily: 'DMSans_400Regular', fontSize: 11, color: 'rgba(31,27,22,0.40)', lineHeight: 16, marginTop: 2 },
   feeInput: { fontFamily: 'DMSans_500Medium', fontSize: 14, color: colors.ink, textAlign: 'right', minWidth: 90, padding: 0 },
 
   inputCardDisabled: { opacity: 0.72, backgroundColor: 'rgba(240,235,228,0.72)' },

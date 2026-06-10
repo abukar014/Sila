@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { supabase } from '../lib/supabase'
 import { colors, space, radius, shadow, glassBorder, glassHighlight } from '../lib/tokens'
 
 const { width: W, height: H } = Dimensions.get('window')
@@ -20,6 +23,25 @@ function scaleD(d: string) {
 const ARCH_PATH = `M11.5488 770.623C11.2016 676.82 10.4391 418.035 11.6934 218.709C11.804 201.134 12.1939 185.51 12.8229 171.65C16.5223 90.1299 134.195 64.6569 200.117 16.5596C259.148 67.0568 375.499 95.5047 380.966 172.995C381.903 186.283 382.453 201.445 382.538 218.709C383.363 386.622 382.878 658.478 382.643 763.368C382.615 775.773 382.601 781.976 380.741 786.992C377.695 795.206 371.203 801.683 362.983 804.711C357.963 806.56 351.694 806.56 339.158 806.56H47.7774C37.3496 806.56 32.1358 806.56 27.9561 805.022C21.1131 802.504 15.7029 797.113 13.1596 790.28C11.6061 786.106 11.587 780.945 11.5488 770.623Z`
 
 export default function HomeScreen() {
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    AsyncStorage.getItem('sila_provider_id').then(async id => {
+      if (id) {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          router.replace('/(provider)/dashboard')
+          return
+        }
+      }
+      setChecking(false)
+    })
+  }, [])
+
+  // Render a blank dark view while checking — same colour as the splash gradient top,
+  // so if a redirect fires there's no visible flash at all.
+  if (checking) return <View style={{ flex: 1, backgroundColor: '#0E2C2A' }} />
+
   return (
     <LinearGradient
       colors={['#0E2C2A', '#134543', '#1A5C5A', '#1F4A3E']}
