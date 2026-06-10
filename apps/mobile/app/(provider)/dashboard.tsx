@@ -91,7 +91,7 @@ export default function DashboardScreen() {
     if (!data) { router.replace('/(auth)/sign-in'); return }
     setProvider(data)
     setLoading(false)
-    supabase.from('providers').update({ last_active_at: new Date().toISOString() }).eq('id', data.id)
+    supabase.from('providers').update({ last_active_at: new Date().toISOString() }).eq('id', data.id).then(() => {})
   }
 
   async function toggleAccepting() {
