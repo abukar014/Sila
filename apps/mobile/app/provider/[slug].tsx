@@ -167,6 +167,7 @@ export default function ProviderProfileScreen() {
             <View style={styles.verifiedBadge}>
               <Text style={styles.verifiedText}>{verifiedLabel}</Text>
             </View>
+            <Text style={styles.verifiedNote}>Credentials verified — not a clinical endorsement.</Text>
           </View>
         </LinearGradient>
 
@@ -391,6 +392,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(63,106,88,0.40)',
   },
   verifiedText: { fontFamily: 'DMSans_600SemiBold', fontSize: 11, color: '#8FD4B0' },
+  verifiedNote: { fontFamily: 'DMSans_400Regular', fontSize: 10, color: 'rgba(251,247,239,0.30)', marginTop: 5, letterSpacing: 0.1 },
 
   // Pull quote
   quoteWrap: {
