@@ -571,6 +571,7 @@ export default function ProvidersScreen() {
       .select('id, slug, name, license_type, credentials, state, specialties, approaches, identity, faith_approach, languages, bio, pull_quote, scheduling_url, insurances, fee_individual, fee_couples, fee_initial, visit_type, telehealth, in_person, photo_url, accepting_clients, verified_date, gender, sliding_scale, age_groups')
       .eq('verification_status', 'verified')
       .eq('status', 'active')
+      .eq('directory_consent', true)
       .order('name', { ascending: true })
       .then(({ data }) => { setProviders(data ?? []); setLoading(false) })
   }, [])
